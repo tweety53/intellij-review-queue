@@ -20,6 +20,19 @@
     </extensions>
 
     <actions>
-        <group id="ReviewQueue.Toolbar" class="com.intellij.openapi.actionSystem.DefaultActionGroup"/>
+        <group id="ReviewQueue.Toolbar" class="com.intellij.openapi.actionSystem.DefaultActionGroup">
+            <action id="ReviewQueue.MarkReviewed"
+                    class="dev.tweety.reviewqueue.actions.MarkReviewedAction"
+                    text="Mark Reviewed"
+                    description="Mark the current file reviewed and go to the next unreviewed file"/>
+            <action id="ReviewQueue.Refresh"
+                    class="dev.tweety.reviewqueue.actions.RefreshQueueAction"
+                    text="Refresh"
+                    description="Re-read the review scope"/>
+            <action id="ReviewQueue.ResetAll"
+                    class="dev.tweety.reviewqueue.actions.ResetAllAction"
+                    text="Reset All"
+                    description="Clear every reviewed mark in this project"/>
+        </group>
     </actions>
 </idea-plugin>
