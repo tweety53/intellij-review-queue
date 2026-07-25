@@ -26,7 +26,7 @@
 - These git4idea / platform APIs are **verified present** in build 262.8665.258 — use exactly these names:
   - `git4idea.repo.GitRepositoryManager.getInstance(project).repositories: List<GitRepository>`
   - `git4idea.repo.GitRepository.GIT_REPO_CHANGE: Topic<GitRepositoryChangeListener>`, callback `repositoryChanged(GitRepository)`
-  - `git4idea.index.getStatus(project, root, paths, withUntracked, withIgnored, withRenames): List<GitFileStatus>` (Kotlin top-level function; JVM class `git4idea.index.GitIndexStatusUtilKt`)
+  - `git4idea.index.getStatus(project, root, paths, b1, b2, b3): List<GitFileStatus>` (Kotlin top-level function; JVM class `git4idea.index.GitIndexStatusUtilKt`). **The three booleans' order was mis-stated in an earlier draft of this plan.** Task 6 established empirically that passing them as `(false, false, true)` makes git fail with `fatal: Unsupported combination of ignored and untracked-files arguments` — that error comes from `--ignored` being combined with `--untracked-files=no`, not from rename handling. The implementation passes **all three false**, which is unambiguous regardless of order: no untracked, no ignored, no rename detection. Consequence: in the staged scope a staged rename surfaces as a delete plus an add rather than one rename entry.
   - `git4idea.index.GitFileStatus` with `index: Char`, `workTree: Char`, `path: FilePath`, `origPath: FilePath?`, `isTracked()`, `getStagedStatus(): FileStatus?`
   - `git4idea.index.createChange(project, root, status, ContentVersion.HEAD, ContentVersion.STAGED): Change` (Kotlin top-level function; JVM class `git4idea.index.GitStageDiffUtilKt`)
   - `git4idea.changes.GitChangeUtils.getThreeDotDiffOrThrow(repository, base, head): Collection<Change>`
