@@ -29,6 +29,10 @@
                     class="dev.tweety.reviewqueue.actions.MarkReviewedAction"
                     text="Mark Reviewed"
                     description="Mark the current file reviewed and go to the next unreviewed file"/>
+            <action id="ReviewQueue.ToggleReviewed"
+                    class="dev.tweety.reviewqueue.actions.ToggleReviewedAction"
+                    text="Toggle Reviewed"
+                    description="Add or remove the reviewed mark on the selected file, without moving the cursor"/>
             <action id="ReviewQueue.Refresh"
                     class="dev.tweety.reviewqueue.actions.RefreshQueueAction"
                     text="Refresh"
