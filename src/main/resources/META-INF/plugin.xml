@@ -21,6 +21,10 @@
 
     <actions>
         <group id="ReviewQueue.Toolbar" class="com.intellij.openapi.actionSystem.DefaultActionGroup">
+            <action id="ReviewQueue.Scope"
+                    class="dev.tweety.reviewqueue.ui.ScopeSelector"
+                    text="Scope"
+                    description="Choose what the review queue lists"/>
             <action id="ReviewQueue.MarkReviewed"
                     class="dev.tweety.reviewqueue.actions.MarkReviewedAction"
                     text="Mark Reviewed"
