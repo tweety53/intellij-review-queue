@@ -123,14 +123,22 @@ what the tree looks like.
 6. Un-mark a file (e.g. via Reset All, or edit+re-stage as in step 8) and re-mark everything.
    **Expected:** the balloon fires again after going incomplete and complete again — it should
    not have fired a second time while still complete (e.g. from an unrelated Refresh click).
+7. **Reopen an already-complete project.** With every file in the queue marked reviewed, close the
+   project (File → Close Project) and reopen it, then open the Review Queue tool window.
+   **Expected:** **no** balloon appears. The queue was already complete before you arrived; there
+   is nothing to announce. A balloon here is a defect — report it.
 
 ## 11. Reviewed marks are never lost
 
 The stored marks are a user's review work. Nothing short of Reset All may destroy them. Each part
 below has previously been a real defect, so run all three.
 
-1. **Scope round trip.** With the Staged scope, mark several files reviewed and note exactly which.
-   Switch the scope to **Commit Range…** (`HEAD~1` → `HEAD`), then back to **Staged**.
+1. **Scope round trip — refresh while you are away.** With the Staged scope, mark several files
+   reviewed and note exactly which. Switch the scope to **Commit Range…** (`HEAD~1` → `HEAD`).
+   **Now click Refresh at least twice while still in the Commit Range scope**, and give the IDE a
+   few seconds so background VCS events land too. Then switch back to **Staged**.
+   The extra refreshes are the point: the defect this catches only appeared from the *second*
+   rebuild in the foreign scope onward, so a round trip without them proves nothing.
    **Expected:** every mark you noted is still there and the progress `N` is unchanged. Marks are
    keyed by root/path/hash, so they carry across scopes.
 2. **Project close and reopen.** Leave the Review Queue tool window open, close the project
@@ -167,6 +175,15 @@ This checks that marks are addressed to content and not to a constant.
    **Expected:** `img.png` returns to unreviewed. If it stays reviewed, the hash is not tracking
    the file's bytes — report it.
 
+## 13b. An unrenderable file does not break diff opening for the rest
+
+1. With the PNG from step 13 still staged, click its row in the tree.
+2. **Expected:** either its diff opens or nothing happens — no error dialog, no "IDE internal
+   error" balloon, no frozen tool window.
+3. Now click a plain text file's row.
+4. **Expected:** that file's diff opens normally. One file the diff framework cannot render must
+   not disable diff opening for every other file in the queue.
+
 ## 14. Nested root / submodule marks the file you selected
 
 Needs a project with a submodule (a git root nested inside another git root).
@@ -177,6 +194,23 @@ Needs a project with a submodule (a git root nested inside another git root).
 4. **Expected:** the "✓ reviewed" marker appears on **the row you selected**, and the progress
    label increments by exactly 1. If the marker lands on a different file — or on no visible row
    at all — stop and report it.
+
+### 14b. The submodule gitlink itself — open question, please answer it
+
+Staging a submodule pointer bump produces a *gitlink* change in the **outer** repo (a row for the
+submodule directory itself, not for a file inside it). Its content revision is
+`GitSubmoduleContentRevision`, which is **not** a `ByteBackedContentRevision` — so if such a row
+reaches the queue, the plugin cannot read bytes for it and hashes it as unresolved on every
+refresh. The consequence would be a row that can never stay marked, and therefore a queue that can
+never reach "all files reviewed".
+
+1. In the outer repo, `git add <submodule-dir>` after committing something inside the submodule.
+2. Refresh the queue and answer: **does a row for the submodule directory appear at all?**
+   (It may legitimately be filtered out before reaching the queue.)
+3. If it does appear: select it, press **Mark Reviewed**, then click **Refresh**.
+   **Expected if healthy:** it stays marked. **If it reverts to unreviewed on every refresh**,
+   record that — it means the completion balloon can never fire in a repo with submodule bumps.
+4. Record the answer either way; this has not been determined.
 
 ## 15. Toggle Reviewed un-marks a single file
 
@@ -235,6 +269,11 @@ disorienting enough to warrant a follow-up change.
 Threading and re-entrancy defects often show up only as logged errors, with no visible symptom.
 Do not sign off without this step.
 
+**First, make sure the slow-operations assertion is actually on.** It is registry-gated, and a
+clean log proves nothing while it is off. Open **Help → Find Action → Registry…**, find
+`ide.slow.operations.assertion`, and confirm it is **enabled**. If it was off, enable it, restart
+the IDE, and redo sections 3–16 before reading the log.
+
 1. **Help → Show Log in Finder** and open `idea.log` (use the log from the instance you just drove).
 2. Search the log for each of:
    - `StackOverflowError` — a selection/refresh feedback cycle.
@@ -244,6 +283,8 @@ Do not sign off without this step.
    - `dev.tweety.reviewqueue` at `WARN`/`ERROR` — e.g. "no tree node for cursor key …" or
      "duplicate entry for …", both of which indicate a real inconsistency.
 3. **Expected:** none of the above appear. Paste any hit verbatim into the sign-off notes.
+4. Note in the sign-off whether `ide.slow.operations.assertion` was on for the run you are
+   reporting. If it was off, say so — the log result is inconclusive.
 
 ---
 
@@ -261,13 +302,16 @@ the code — only from having done it in the IDE):
 - [ ] 7. Marks survive IDE restart
 - [ ] 8. Re-staging returns exactly the edited file
 - [ ] 9. Three scopes work; commit-range rejects space/`;`
-- [ ] 10. Completion balloon + clipboard copy verified
-- [ ] 11. Reviewed marks survive scope round trip, project reopen and a failing root
+- [ ] 10. Completion balloon + clipboard copy verified, and silent on reopening a complete project
+- [ ] 11. Reviewed marks survive a refreshed scope round trip, project reopen and a failing root
 - [ ] 12. One failing root reports its own error; other roots still list
 - [ ] 13. Staged deletion and binary file return to unreviewed on change
+- [ ] 13b. An unrenderable file does not break diff opening for other files
 - [ ] 14. Nested root/submodule — the file marked is the file selected
+- [ ] 14b. Submodule gitlink — does a row appear, and can it stay marked? (record the answer)
 - [ ] 15. Toggle Reviewed un-marks one file without moving the cursor
 - [ ] 16. `git` before/after diff is empty — no repository mutation
 - [ ] 17. Rename-as-delete+add — acceptable? (yes/no + comment)
 - [ ] 18. Cursor relocation — feels right? (yes/no + comment)
 - [ ] 19. idea.log read; no StackOverflowError / slow-EDT / reviewqueue diagnostics
+      (state whether `ide.slow.operations.assertion` was enabled)

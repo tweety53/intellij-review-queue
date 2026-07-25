@@ -73,8 +73,17 @@ file to its previously reviewed bytes restores the mark.
 Because state is keyed by root, path, and hash — not by scope — a file reviewed under `Staged`
 still reads reviewed under `BranchVsBase` when the content is identical.
 
-Entries whose paths appear in no current queue are pruned on each queue rebuild, bounding state
-growth.
+**Stored marks are never pruned.** This is deliberate. Because keys carry no notion of scope, a
+rebuild that does not contain a file says nothing about whether that file's mark is still wanted —
+it may be a different scope, a root that failed to resolve, or VCS mappings that have not
+initialised yet. Any rule that guesses otherwise deletes a user's review progress silently, which
+is the single worst failure this plugin can have; two attempts at such a rule were both subtly
+wrong. Removing pruning eliminates that data-loss path entirely.
+
+The cost is nil. The map is bounded in practice by the number of distinct files ever reviewed in
+the project — two short strings each, a few KB in workspace state even after heavy use — and a
+stale entry is inert: it only reads as reviewed if that exact path reappears holding exactly the
+content that was reviewed, which is the correct answer anyway. Only **Reset all** clears entries.
 
 ### `ReviewQueueService`
 

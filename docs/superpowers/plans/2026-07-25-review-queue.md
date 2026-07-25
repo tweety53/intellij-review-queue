@@ -399,9 +399,15 @@ git commit -m "feat: add review identity model and content hashing"
   - `fun markReviewed(item: ReviewItem)`
   - `fun unmark(key: ReviewKey)`
   - `fun resetAll()`
-  - `fun prune(liveKeys: Set<ReviewKey>)`
   - `fun reviewedCount(items: List<ReviewItem>): Int`
   - `companion object { fun getInstance(project: Project): ReviewStateService }`
+
+> **Superseded during final review.** This task originally specified `fun prune(liveKeys:
+> Set<ReviewKey>)`, and the snippets below show it. Pruning was removed from the shipped plugin.
+> Keys are root+path+hash and carry no notion of scope, so a rebuild that omits a file says nothing
+> about whether its mark is still wanted — pruning on that basis silently destroyed the user's
+> review progress. The map is a few KB even after heavy use and a stale entry is inert, so the
+> entry is simply retained. Only Reset all clears marks. See the design spec, `ReviewStateService`.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -466,15 +472,8 @@ class ReviewStateServiceTest {
         assertFalse(service.isReviewed(item("b.kt", "h2")))
     }
 
-    @Test
-    fun `prune drops keys not in the live set`() {
-        val service = ReviewStateService()
-        service.markReviewed(item("a.kt", "h1"))
-        service.markReviewed(item("b.kt", "h2"))
-        service.prune(setOf(ReviewKey("/repo", "a.kt")))
-        assertTrue(service.isReviewed(item("a.kt", "h1")))
-        assertFalse(service.isReviewed(item("b.kt", "h2")))
-    }
+    // Superseded: pruning was removed. The shipped test in its place is
+    // `marks survive a rebuild that does not contain them`.
 
     @Test
     fun `state round trips`() {
@@ -553,11 +552,7 @@ class ReviewStateService : PersistentStateComponent<ReviewStateService.State> {
         myState.reviewed.clear()
     }
 
-    /** Drops stored marks for files no longer present in any queue, bounding state growth. */
-    fun prune(liveKeys: Set<ReviewKey>) {
-        val live = liveKeys.mapTo(mutableSetOf()) { it.storageKey() }
-        myState.reviewed.keys.retainAll(live)
-    }
+    // Superseded: no prune(). Stored marks are never pruned — see the note above.
 
     fun reviewedCount(items: List<ReviewItem>): Int = items.count { isReviewed(it) }
 
@@ -1359,7 +1354,7 @@ class ReviewQueueService(private val project: Project) {
             }
         }.toMap()
 
-        state.prune(items.mapTo(mutableSetOf()) { it.key })
+        // Superseded: no prune call here in the shipped service.
 
         cursor = ReviewCursor.relocate(items, previousKey, previousIndex)
             ?: ReviewCursor.firstUnreviewed(items) { state.isReviewed(it) }
