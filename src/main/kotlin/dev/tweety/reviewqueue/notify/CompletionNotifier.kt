@@ -26,13 +26,21 @@ object BranchNameParser {
 class CompletionNotifier(private val project: Project) {
 
     /**
-     * `null` until the first snapshot, which seeds it. Starting armed would fire the balloon again
-     * every time a project whose queue is already fully reviewed is reopened.
+     * `null` until the first snapshot that actually holds a queue. Starting armed would fire the
+     * balloon again every time a project whose queue is already fully reviewed is reopened.
+     *
+     * An empty queue must not seed it: at project open the first applied rebuild is frequently the
+     * empty one (VCS mappings are not initialised yet), and seeding `armed = true` from that would
+     * reintroduce exactly the balloon-on-reopen this guards against.
      */
     private var armed: Boolean? = null
 
     fun onSnapshot(snapshot: QueueSnapshot) {
-        val complete = snapshot.items.isNotEmpty() && snapshot.reviewedCount == snapshot.items.size
+        if (snapshot.items.isEmpty()) {
+            if (armed != null) armed = true
+            return
+        }
+        val complete = snapshot.reviewedCount == snapshot.items.size
         if (armed == null) armed = !complete
         if (!complete) {
             armed = true

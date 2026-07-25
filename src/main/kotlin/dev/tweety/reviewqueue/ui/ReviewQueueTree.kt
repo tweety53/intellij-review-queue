@@ -43,10 +43,15 @@ class ReviewQueueTree(
 
         // The diff opens only from an explicit user gesture — never from a programmatic
         // re-selection, which would steal focus on every background VCS event.
-        setDoubleClickAndEnterKeyHandler { fireActivated() }
+        //
+        // One gesture must open exactly one diff, since each open builds a fresh
+        // ChainDiffVirtualFile. A double click delivers two mouseReleased events, so this handler
+        // takes only the first (clickCount == 1) and no double-click handler is installed at all —
+        // the first click of a double click has already opened the file the user aimed at.
+        setEnterKeyHandler { fireActivated(); true }
         addMouseListener(object : MouseAdapter() {
             override fun mouseReleased(e: MouseEvent) {
-                if (e.isPopupTrigger || e.button != MouseEvent.BUTTON1) return
+                if (e.isPopupTrigger || e.button != MouseEvent.BUTTON1 || e.clickCount != 1) return
                 if (getPathForLocation(e.x, e.y) == null) return
                 fireActivated()
             }
