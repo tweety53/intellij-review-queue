@@ -19,6 +19,8 @@ dependencies {
     intellijPlatform {
         intellijIdeaUltimate(providers.gradleProperty("platformVersion").get())
         bundledPlugin("Git4Idea")
+        bundledModule("intellij.platform.vcs.dvcs")
+        bundledModule("intellij.platform.vcs.dvcs.impl")
         testFramework(TestFrameworkType.Platform)
     }
     testImplementation("junit:junit:4.13.2")
