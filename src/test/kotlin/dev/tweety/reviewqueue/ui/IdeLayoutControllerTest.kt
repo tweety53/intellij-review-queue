@@ -27,4 +27,19 @@ class IdeLayoutControllerTest : HeavyPlatformTestCase() {
             controller.state.hiddenByReview.isEmpty(),
         )
     }
+
+    fun testHideDoesNotClobberAnAlreadyRememberedLayout() {
+        val controller = IdeLayoutController.getInstance(project)
+        val state = IdeLayoutController.State()
+        state.hiddenByReview = mutableListOf("Project")
+        controller.loadState(state)
+
+        controller.hideForReview()
+
+        assertEquals(
+            "a second hide must not overwrite the first record, or the window is never reopened",
+            listOf("Project"),
+            controller.state.hiddenByReview,
+        )
+    }
 }

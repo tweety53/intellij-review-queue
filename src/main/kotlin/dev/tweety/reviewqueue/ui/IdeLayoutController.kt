@@ -36,6 +36,10 @@ class IdeLayoutController(private val project: Project) :
 
     /** Hides the managed windows that are currently visible, remembering which they were. */
     fun hideForReview() {
+        // A second hide with nothing restored in between would overwrite the first record with an
+        // empty one — the windows are no longer visible, so they would drop out of the filter and
+        // never be reopened. The first record stands until restore() clears it.
+        if (myState.hiddenByReview.isNotEmpty()) return
         val manager = ToolWindowManager.getInstance(project)
         val hidden = MANAGED_IDS.filter { manager.getToolWindow(it)?.isVisible == true }
         hidden.forEach { manager.getToolWindow(it)?.hide(null) }
