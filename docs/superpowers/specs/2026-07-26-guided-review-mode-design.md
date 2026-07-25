@@ -21,27 +21,32 @@ code — marks it reviewed and brings up the next. You never leave the diff unti
 
 - A review *session*: an explicit mode with a start, a position, and an end.
 - **Start Review** / **End Review**, grouped with Refresh and Reset all in the panel toolbar.
-- **Mark Reviewed** and **Exit Review** in the diff viewer's own toolbar, plus a keyboard shortcut
-  for Mark Reviewed that is active only during a session.
+- **Previous File**, **Mark Reviewed**, **Toggle Reviewed** and **Exit Review** in the diff viewer's
+  own toolbar, plus a keyboard shortcut for Mark Reviewed that is active only during a session.
 - Hiding the Project and Review Queue tool windows for the duration of a session, and restoring
   them afterwards.
 - Automatic advance to the next unreviewed file on marking.
+- Recovering from a mis-mark without leaving the diff.
 
 **Out of scope**
 
-- Un-marking a single file (see *Removed*).
 - Persisting an in-progress session across IDE restarts.
 - Adding files to a session already under way.
 - Any change to how marks are stored or hashed.
+- A dedicated "next file without marking" action — **Mark Reviewed** on an already-marked file
+  re-stores the same hash and advances, which covers moving forward after stepping back.
 
-## Removed
+## Recovering from a mis-mark
 
-`ToggleReviewedAction` and `ReviewQueueService.toggleReviewed` are deleted.
+Marking advances immediately, so a mis-marked file is behind you by the time you notice. The
+recovery is two actions in the diff toolbar, both of which stay within the session:
 
-**Consequence, stated deliberately:** un-marking one file is no longer possible. A mis-click during
-a session can only be undone with **Reset all**, which clears every mark in the project. This was
-the owner's explicit call after the trade-off was raised; it is recorded here so the decision is
-visible rather than rediscovered.
+1. **Previous File** steps back one position and changes no marks. Disabled at the first file.
+2. **Toggle Reviewed** removes (or re-adds) the mark on the file currently displayed.
+
+**Toggle Reviewed moves out of the panel and into the diff toolbar**, where it acts on the current
+file rather than a tree selection. In the panel it would be unreachable during a session — which is
+precisely when marking, and mis-marking, happens.
 
 ## Components
 
@@ -97,7 +102,9 @@ flicker per file, and is a drop-in substitution behind `ReviewDiffPresenter`'s i
 | End Review | Panel toolbar | Session active |
 | Refresh | Panel toolbar | Always |
 | Reset all | Panel toolbar | Always (confirmation dialog) |
+| Previous File | Diff toolbar | Session active, not at the first file |
 | Mark Reviewed | Diff toolbar + shortcut | Session active |
+| Toggle Reviewed | Diff toolbar | Session active |
 | Exit Review | Diff toolbar | Session active |
 
 **End Review and Exit Review are the same action**, registered once and surfaced in both places —
@@ -105,10 +112,13 @@ the panel (for when a session is running and you have reopened the panel) and th
 (where you actually are). They are named differently only because the table lists them by location;
 the implementation has one action class and one handler.
 
-The shortcut for Mark Reviewed defaults to <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>Enter</kbd>,
-registered against the diff viewer so it cannot clash with normal editing bindings, and rebindable
-under Settings → Keymap. If that binding is already taken in the default macOS keymap, the
-implementer picks the nearest free equivalent and records the choice.
+The shortcut for Mark Reviewed is <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Space</kbd>, registered
+against the diff viewer and rebindable under Settings → Keymap.
+
+That chord is Smart Type Completion in the default keymap. Because the binding is scoped to the
+diff viewer, where code completion has no meaning in a read-only diff, there is no practical
+conflict — but the implementer must verify the scoping actually holds and that the chord does not
+leak into normal editors.
 
 ### Panel
 
@@ -143,22 +153,33 @@ that file's diff when no session is running. During a session the panel is hidde
   Toggle Reviewed, both of which are leaving the panel; position now belongs to `ReviewSession`.
   `QueueSnapshot` drops its `cursor` field and `ReviewCursor.relocate` loses its last caller.
   The service is left with one job: *what files are in scope right now*.
-- The original spec's data-flow item 3 ("Toggling a reviewed file off removes its stored entry")
-  no longer holds; see *Removed*.
+- `ReviewQueueService.toggleReviewed` **stays** — its caller moves from the panel to the diff
+  toolbar and passes the current session file's key instead of the tree selection.
+- `ReviewQueueDataKeys.SELECTED_KEY` and the panel's `uiDataSnapshot` are deleted. Toggle Reviewed
+  was their only consumer, so the panel ends up publishing no data keys at all — which strengthens
+  the standing read-only guarantee: nothing this tool window exposes can feed a VCS action.
 - The original spec's "clicking any row opens that file's diff" remains true only outside a session.
 
 ## Testing
 
 **Unit (pure, no IDE):** `ReviewSession` transitions — starting with a mix of marked and unmarked
-files, advancing, skipping a file that vanished, finishing on the last file, exiting early.
-`DiffChainPlanner` keeps its existing tests.
+files, advancing, stepping back, stepping back at the first file (a no-op), skipping a file that
+vanished, finishing on the last file, exiting early. `DiffChainPlanner` keeps its existing tests.
 
 **Integration (existing heavy fixture):** drive a real repo through start → mark every file →
 finish, asserting the marks are stored and the session ends inactive.
 
 **Manual only** — added to `docs/manual-verification.md`: tool windows hiding and restoring
-(including after an IDE quit mid-session), the diff toolbar actually showing both buttons, the
-keyboard shortcut firing, and the tab title tracking progress.
+(including after an IDE quit mid-session), the diff toolbar actually showing all four actions, the
+keyboard shortcut firing in the diff *and not leaking into normal editors*, the tab title tracking
+progress, and the full mis-mark recovery (mark the wrong file → Previous File → Toggle Reviewed →
+Mark Reviewed to continue).
+
+**Re-test carried over from the previous release:** Toggle Reviewed appeared permanently disabled
+during the owner's first hands-on test. The wiring was correct; the cause was almost certainly that
+`refresh()` was dying with `Synchronous execution under ReadAction`, leaving the queue empty and
+every row-dependent action disabled. That refresh bug is fixed, so this must be re-confirmed rather
+than assumed.
 
 ## Success criteria
 
