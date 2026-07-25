@@ -3,12 +3,16 @@ package dev.tweety.reviewqueue.ui
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.actionSystem.ActionManager
 import com.intellij.openapi.actionSystem.ActionPlaces
+import com.intellij.openapi.actionSystem.DataKey
+import com.intellij.openapi.actionSystem.DataSink
 import com.intellij.openapi.actionSystem.DefaultActionGroup
+import com.intellij.openapi.actionSystem.UiDataProvider
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.SimpleToolWindowPanel
 import com.intellij.ui.components.JBLabel
 import com.intellij.ui.components.JBScrollPane
 import com.intellij.util.ui.JBUI
+import dev.tweety.reviewqueue.model.ReviewKey
 import dev.tweety.reviewqueue.model.displayName
 import dev.tweety.reviewqueue.queue.ReviewQueueService
 import javax.swing.JPanel
@@ -20,7 +24,13 @@ import java.awt.BorderLayout
  * Implements [Disposable] so [ReviewQueueToolWindowFactory] can wire it as the content's disposer;
  * that is what unregisters the [ReviewQueueService] listener when the tool window content is torn down.
  */
-class ReviewQueuePanel(private val project: Project) : SimpleToolWindowPanel(true, true), Disposable {
+/** Data keys this tool window publishes. Deliberately none of the `VcsDataKeys` change keys. */
+object ReviewQueueDataKeys {
+    val SELECTED_KEY: DataKey<ReviewKey> = DataKey.create("ReviewQueue.SelectedKey")
+}
+
+class ReviewQueuePanel(private val project: Project) :
+    SimpleToolWindowPanel(true, true), Disposable, UiDataProvider {
 
     private val service = ReviewQueueService.getInstance(project)
     private val tree = ReviewQueueTree(project, service)
@@ -43,12 +53,17 @@ class ReviewQueuePanel(private val project: Project) : SimpleToolWindowPanel(tru
         }
         setContent(content)
 
+        // Selection only moves the cursor. Opening the diff from here would fire on every
+        // programmatic re-selection, i.e. on every background VCS event, stealing focus.
         tree.addSelectionListener {
-            tree.selectedKey()?.let { key ->
-                service.selectByKey(key)
-                if (service.changeFor(key) != null) {
-                    ReviewDiffOpener.open(project, key)
-                }
+            if (tree.isProgrammaticUpdate) return@addSelectionListener
+            tree.selectedKey()?.let { key -> service.selectByKey(key) }
+        }
+        // Explicit user gesture: click, double click or Enter on a row.
+        tree.setActivationHandler { key ->
+            service.selectByKey(key)
+            if (service.changeFor(key) != null) {
+                ReviewDiffOpener.open(project, key)
             }
         }
 
@@ -63,6 +78,11 @@ class ReviewQueuePanel(private val project: Project) : SimpleToolWindowPanel(tru
             "  •  ${snapshot.scope.displayName()}"
         errorLabel.text = snapshot.errors.entries.joinToString("; ") { "${it.key}: ${it.value}" }
         errorLabel.isVisible = snapshot.errors.isNotEmpty()
+    }
+
+    override fun uiDataSnapshot(sink: DataSink) {
+        super.uiDataSnapshot(sink)
+        sink.lazy(ReviewQueueDataKeys.SELECTED_KEY) { tree.selectedKey() }
     }
 
     override fun dispose() = Unit

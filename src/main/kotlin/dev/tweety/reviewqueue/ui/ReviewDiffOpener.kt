@@ -18,17 +18,21 @@ object ReviewDiffOpener {
         val service = ReviewQueueService.getInstance(project)
         val snapshot = service.snapshot()
 
-        val withChanges = snapshot.items.mapNotNull { item ->
-            service.changeFor(item.key)?.let { item.key to it }
+        // ChangeDiffRequestProducer.create is @Nullable — it returns null for a change the diff
+        // framework cannot render. Filtering keeps keys and producers aligned; letting a null into
+        // the chain would break diff opening for every file in the queue, not just that one.
+        val entries = snapshot.items.mapNotNull { item ->
+            val change = service.changeFor(item.key) ?: return@mapNotNull null
+            ChangeDiffRequestProducer.create(project, change)?.let { item.key to it }
         }
-        if (withChanges.isEmpty()) return
+        if (entries.isEmpty()) return
 
-        val producers = withChanges.map { (_, change) ->
-            ChangeDiffRequestProducer.create(project, change)
-        }
-        val index = withChanges.indexOfFirst { it.first == key }.coerceAtLeast(0)
+        // With the list properly filtered, -1 is a genuine "this file has no diff to show".
+        // Falling back to index 0 would open an unrelated file.
+        val index = entries.indexOfFirst { it.first == key }
+        if (index < 0) return
 
-        val chain = ChangeDiffRequestChain(producers, index)
+        val chain = ChangeDiffRequestChain(entries.map { it.second }, index)
         val file = ChainDiffVirtualFile(chain, "Review Queue")
         DiffEditorTabFilesManager.getInstance(project).showDiffFile(file, true)
     }
