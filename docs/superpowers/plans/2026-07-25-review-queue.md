@@ -15,6 +15,11 @@
 - JDK/toolchain: 21. Kotlin JVM target: 21.
 - Base package: `dev.tweety.reviewqueue`.
 - Depends on the bundled plugin `Git4Idea`.
+- **Verified working toolchain** (established in Task 1; the versions written into Task 1's steps below
+  were stale and are superseded by these):
+  - Gradle wrapper `9.6.1` — the IntelliJ Platform Gradle Plugin 2.x requires Gradle 9.0+
+  - `org.jetbrains.intellij.platform` `2.18.1` — older versions cannot parse 2026.2 module descriptors
+  - `kotlin("jvm")` `2.4.10` — 2.1.x crashes with an internal type-checker error on this toolchain
 - **All tests use JUnit 4** (`org.junit.Test`, `org.junit.Assert.*`). The IntelliJ platform test framework is JUnit 4 based; mixing JUnit 5 into the same source set causes harness discovery problems.
 - **The plugin never mutates a repository.** No `git add`, `commit`, `checkout`, `stash`, or any other write command. Read-only git queries only.
 - Review state is per-project workspace state (`StoragePathMacros.WORKSPACE_FILE`). It is never written into the repository under review.
