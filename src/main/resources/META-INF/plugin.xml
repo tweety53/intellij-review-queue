@@ -17,6 +17,7 @@
         <toolWindow id="Review Queue"
                     anchor="right"
                     factoryClass="dev.tweety.reviewqueue.ui.ReviewQueueToolWindowFactory"/>
+        <postStartupActivity implementation="dev.tweety.reviewqueue.ui.ReviewLayoutRestorer"/>
     </extensions>
 
     <actions>
