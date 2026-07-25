@@ -2,11 +2,15 @@ package dev.tweety.reviewqueue.queue
 
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.application.ApplicationManager
+import com.intellij.openapi.application.ModalityState
+import com.intellij.openapi.application.ReadAction
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
+import com.intellij.openapi.diagnostic.thisLogger
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vcs.changes.Change
 import com.intellij.openapi.vcs.changes.ChangeListListener
+import com.intellij.util.concurrency.AppExecutorUtil
 import dev.tweety.reviewqueue.core.ReviewCursor
 import dev.tweety.reviewqueue.core.ReviewOrdering
 import dev.tweety.reviewqueue.git.ChangeMapper
@@ -18,6 +22,7 @@ import dev.tweety.reviewqueue.model.ReviewScope
 import dev.tweety.reviewqueue.state.ReviewStateService
 import git4idea.repo.GitRepository
 import git4idea.repo.GitRepositoryChangeListener
+import java.util.IdentityHashMap
 
 data class QueueSnapshot(
     val items: List<ReviewItem>,
@@ -33,6 +38,12 @@ object QueueAssembler {
         val items: List<ReviewItem>,
         val errors: Map<String, String>,
         val changesByKey: Map<ReviewKey, Change>,
+        /**
+         * The authoritative key for each [Change], derived from the root that produced it. The tree
+         * looks keys up here rather than re-deriving them from path prefixes, which disagrees with
+         * this mapping whenever roots are nested (submodules).
+         */
+        val keysByChange: Map<Change, ReviewKey>,
     )
 
     fun assemble(
@@ -40,23 +51,42 @@ object QueueAssembler {
         rootOrder: List<String>,
     ): Assembled {
         val errors = results.mapNotNull { r -> r.error?.let { r.rootPath to it } }.toMap()
-        val pairs = results.flatMap { result ->
-            result.changes.mapNotNull { change ->
-                ChangeMapper.toItem(result.rootPath, change)?.let { item -> item to change }
+
+        val items = mutableListOf<ReviewItem>()
+        val changesByKey = LinkedHashMap<ReviewKey, Change>()
+        val keysByChange = IdentityHashMap<Change, ReviewKey>()
+
+        for (result in results) {
+            for (change in result.changes) {
+                val item = ChangeMapper.toItem(result.rootPath, change) ?: continue
+                // Duplicates are handled explicitly rather than collapsed by a map builder: a
+                // silent collapse leaves `items` longer than the change lookup, so the tree renders
+                // one row while the progress label counts two.
+                if (changesByKey.containsKey(item.key)) {
+                    thisLogger().warn(
+                        "Review queue: duplicate entry for ${item.key.storageKey()}; keeping the first change"
+                    )
+                    continue
+                }
+                items += item
+                changesByKey[item.key] = change
+                keysByChange[change] = item.key
             }
         }
-        val items = ReviewOrdering.order(pairs.map { it.first }, rootOrder)
-        val changesByKey = pairs.associate { (item, change) -> item.key to change }
-        return Assembled(items, errors, changesByKey)
+
+        return Assembled(ReviewOrdering.order(items, rootOrder), errors, changesByKey, keysByChange)
     }
 }
 
 /**
  * Owns the active scope, the ordered queue and the cursor, and rebuilds on VCS change events so
  * a fix round that rewrites files returns exactly those files to the unreviewed set.
+ *
+ * The rebuild itself (git queries plus a content hash per file) runs on a background thread; only
+ * the small apply step touches the EDT.
  */
 @Service(Service.Level.PROJECT)
-class ReviewQueueService(private val project: Project) {
+class ReviewQueueService(private val project: Project) : Disposable {
 
     private val source = GitReviewSource(project)
     private val state get() = ReviewStateService.getInstance(project)
@@ -67,7 +97,17 @@ class ReviewQueueService(private val project: Project) {
     private var items: List<ReviewItem> = emptyList()
     private var errors: Map<String, String> = emptyMap()
     private var changesByKey: Map<ReviewKey, Change> = emptyMap()
+    private var keysByChange: Map<Change, ReviewKey> = emptyMap()
     private var cursor: Int? = null
+
+    /** The scope the last applied rebuild ran for; `null` until the first rebuild has been applied. */
+    private var lastPrunedScope: ReviewScope? = null
+
+    private data class Rebuild(
+        val scope: ReviewScope,
+        val results: List<RootResult>,
+        val assembled: QueueAssembler.Assembled,
+    )
 
     init {
         val connection = project.messageBus.connect()
@@ -77,6 +117,7 @@ class ReviewQueueService(private val project: Project) {
         connection.subscribe(GitRepository.GIT_REPO_CHANGE, GitRepositoryChangeListener { scheduleRefresh() })
     }
 
+    /** Cheap and EDT-safe: reads already-computed state, spawns no processes. */
     fun snapshot(): QueueSnapshot =
         QueueSnapshot(items, cursor, state.reviewedCount(items), errors, scope)
 
@@ -85,19 +126,38 @@ class ReviewQueueService(private val project: Project) {
         refresh()
     }
 
+    /**
+     * Resolves the current scope off the EDT and applies the result on it: `getStatus` and the
+     * per-file content read are git subprocesses, which must never run on the EDT. `coalesceBy`
+     * also collapses refresh storms (every `changeListUpdateDone` lands here) into one round trip.
+     */
     fun refresh() {
+        if (project.isDisposed) return
+        val requestedScope = scope
+        ReadAction.nonBlocking<Rebuild> {
+            val results = source.resolve(requestedScope)
+            Rebuild(requestedScope, results, QueueAssembler.assemble(results, source.rootOrder()))
+        }
+            .expireWith(this)
+            .coalesceBy(this)
+            .finishOnUiThread(ModalityState.any()) { applyRebuild(it) }
+            .submit(AppExecutorUtil.getAppExecutorService())
+    }
+
+    private fun applyRebuild(rebuild: Rebuild) {
+        if (project.isDisposed) return
+        // A scope change raced this rebuild; the refresh for the new scope is already in flight.
+        if (rebuild.scope != scope) return
+
         val previousKey = cursor?.let { items.getOrNull(it)?.key }
         val previousIndex = cursor ?: 0
 
-        val results = source.resolve(scope)
-        val rootOrder = source.rootOrder()
-        val assembled = QueueAssembler.assemble(results, rootOrder)
+        items = rebuild.assembled.items
+        errors = rebuild.assembled.errors
+        changesByKey = rebuild.assembled.changesByKey
+        keysByChange = rebuild.assembled.keysByChange
 
-        items = assembled.items
-        errors = assembled.errors
-        changesByKey = assembled.changesByKey
-
-        state.prune(items.mapTo(mutableSetOf()) { it.key })
+        pruneIfTrustworthy(rebuild)
 
         cursor = ReviewCursor.relocate(items, previousKey, previousIndex)
             ?: ReviewCursor.firstUnreviewed(items) { state.isReviewed(it) }
@@ -105,6 +165,30 @@ class ReviewQueueService(private val project: Project) {
             cursor = ReviewCursor.firstUnreviewed(items) { state.isReviewed(it) } ?: cursor
         }
         fireChanged()
+    }
+
+    /**
+     * Prunes only when the rebuild is trustworthy enough to conclude that a missing key is really
+     * gone: every root resolved, at least one root, at least one item, and the scope unchanged
+     * since the previous rebuild. An empty or partially failed rebuild is the normal state at
+     * project open (VCS mappings are not initialised yet) and after an unresolvable ref — pruning
+     * on one of those erased every stored mark. The state map is tiny; keeping stale entries costs
+     * nothing next to losing review work.
+     */
+    private fun pruneIfTrustworthy(rebuild: Rebuild) {
+        val scopeChanged = lastPrunedScope != rebuild.scope
+        lastPrunedScope = rebuild.scope
+        if (scopeChanged) return
+
+        val results = rebuild.results
+        if (results.isEmpty()) return
+        if (results.any { it.error != null }) return
+        if (items.isEmpty()) return
+
+        // Only roots that actually resolved in this pass are eligible; a root that is absent
+        // entirely keeps its marks.
+        val resolvedRoots = results.mapTo(mutableSetOf()) { it.rootPath }
+        state.prune(items.mapTo(mutableSetOf()) { it.key }, resolvedRoots)
     }
 
     fun markCurrentReviewed() {
@@ -115,15 +199,20 @@ class ReviewQueueService(private val project: Project) {
         fireChanged()
     }
 
+    /** Toggles the stored mark for [key]. Deliberately does not move the cursor. */
     fun toggleReviewed(key: ReviewKey) {
         val item = items.firstOrNull { it.key == key } ?: return
         if (state.isReviewed(item)) state.unmark(key) else state.markReviewed(item)
         fireChanged()
     }
 
+    /**
+     * Moves the cursor to [key]. A no-op when the cursor is already there — otherwise the tree's
+     * selection listener and the tree refresh that follows `fireChanged()` feed each other.
+     */
     fun selectByKey(key: ReviewKey) {
         val index = items.indexOfFirst { it.key == key }
-        if (index >= 0) {
+        if (index >= 0 && index != cursor) {
             cursor = index
             fireChanged()
         }
@@ -139,10 +228,15 @@ class ReviewQueueService(private val project: Project) {
 
     fun changeFor(key: ReviewKey): Change? = changesByKey[key]
 
+    /** The authoritative key for [change], as derived by the root that produced it. */
+    fun keyFor(change: Change): ReviewKey? = keysByChange[change]
+
     fun addListener(listener: () -> Unit, parent: Disposable) {
         listeners.add(listener)
         com.intellij.openapi.util.Disposer.register(parent) { listeners.remove(listener) }
     }
+
+    override fun dispose() = Unit
 
     private fun scheduleRefresh() {
         ApplicationManager.getApplication().invokeLater({ refresh() }, project.disposed)

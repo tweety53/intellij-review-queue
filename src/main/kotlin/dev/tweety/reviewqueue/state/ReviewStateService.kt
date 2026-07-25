@@ -47,10 +47,21 @@ class ReviewStateService : PersistentStateComponent<ReviewStateService.State> {
         myState.reviewed.clear()
     }
 
-    /** Drops stored marks for files no longer present in any queue, bounding state growth. */
-    fun prune(liveKeys: Set<ReviewKey>) {
+    /**
+     * Drops stored marks for files no longer present in any queue, bounding state growth.
+     *
+     * Pruning is deliberately conservative: only entries belonging to [prunableRoots] are eligible.
+     * A root that failed to resolve, or that was not reported at all (VCS mappings not yet
+     * initialised, repository temporarily gone), must never lose its marks — losing a mark costs a
+     * user real review work, while keeping a stale one costs a few bytes of workspace state.
+     */
+    fun prune(liveKeys: Set<ReviewKey>, prunableRoots: Set<String>) {
+        if (prunableRoots.isEmpty()) return
         val live = liveKeys.mapTo(mutableSetOf()) { it.storageKey() }
-        myState.reviewed.keys.retainAll(live)
+        myState.reviewed.keys.removeAll { stored ->
+            val root = ReviewKey.fromStorageKey(stored)?.rootPath ?: return@removeAll false
+            root in prunableRoots && stored !in live
+        }
     }
 
     fun reviewedCount(items: List<ReviewItem>): Int = items.count { isReviewed(it) }

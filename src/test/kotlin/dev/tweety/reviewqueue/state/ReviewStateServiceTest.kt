@@ -61,9 +61,26 @@ class ReviewStateServiceTest {
         val service = ReviewStateService()
         service.markReviewed(item("a.kt", "h1"))
         service.markReviewed(item("b.kt", "h2"))
-        service.prune(setOf(ReviewKey("/repo", "a.kt")))
+        service.prune(setOf(ReviewKey("/repo", "a.kt")), setOf("/repo"))
         assertTrue(service.isReviewed(item("a.kt", "h1")))
         assertFalse(service.isReviewed(item("b.kt", "h2")))
+    }
+
+    @Test
+    fun `prune leaves roots outside the prunable set untouched`() {
+        val service = ReviewStateService()
+        service.markReviewed(item("a.kt", "h1"))
+        service.markReviewed(ReviewItem(ReviewKey("/other", "b.kt"), "h2"))
+        service.prune(setOf(ReviewKey("/repo", "a.kt")), setOf("/repo"))
+        assertTrue(service.isReviewed(ReviewItem(ReviewKey("/other", "b.kt"), "h2")))
+    }
+
+    @Test
+    fun `prune with no prunable roots keeps everything`() {
+        val service = ReviewStateService()
+        service.markReviewed(item("a.kt", "h1"))
+        service.prune(emptySet(), emptySet())
+        assertTrue(service.isReviewed(item("a.kt", "h1")))
     }
 
     @Test
