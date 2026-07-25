@@ -100,12 +100,8 @@ class ReviewQueueService(private val project: Project) : Disposable {
     private var keysByChange: Map<Change, ReviewKey> = emptyMap()
     private var cursor: Int? = null
 
-    /** The scope the last applied rebuild ran for; `null` until the first rebuild has been applied. */
-    private var lastPrunedScope: ReviewScope? = null
-
     private data class Rebuild(
         val scope: ReviewScope,
-        val results: List<RootResult>,
         val assembled: QueueAssembler.Assembled,
     )
 
@@ -136,11 +132,14 @@ class ReviewQueueService(private val project: Project) : Disposable {
         val requestedScope = scope
         ReadAction.nonBlocking<Rebuild> {
             val results = source.resolve(requestedScope)
-            Rebuild(requestedScope, results, QueueAssembler.assemble(results, source.rootOrder()))
+            Rebuild(requestedScope, QueueAssembler.assemble(results, source.rootOrder()))
         }
             .expireWith(this)
             .coalesceBy(this)
-            .finishOnUiThread(ModalityState.any()) { applyRebuild(it) }
+            // Deliberately not ModalityState.any(): that would let the queue rebuild underneath the
+            // Commit Range input and the Reset All confirmation, changing what the user is deciding
+            // about while they decide. The apply waits until no modal dialog is up.
+            .finishOnUiThread(ModalityState.nonModal()) { applyRebuild(it) }
             .submit(AppExecutorUtil.getAppExecutorService())
     }
 
@@ -157,38 +156,12 @@ class ReviewQueueService(private val project: Project) : Disposable {
         changesByKey = rebuild.assembled.changesByKey
         keysByChange = rebuild.assembled.keysByChange
 
-        pruneIfTrustworthy(rebuild)
-
         cursor = ReviewCursor.relocate(items, previousKey, previousIndex)
             ?: ReviewCursor.firstUnreviewed(items) { state.isReviewed(it) }
         if (previousKey == null) {
             cursor = ReviewCursor.firstUnreviewed(items) { state.isReviewed(it) } ?: cursor
         }
         fireChanged()
-    }
-
-    /**
-     * Prunes only when the rebuild is trustworthy enough to conclude that a missing key is really
-     * gone: every root resolved, at least one root, at least one item, and the scope unchanged
-     * since the previous rebuild. An empty or partially failed rebuild is the normal state at
-     * project open (VCS mappings are not initialised yet) and after an unresolvable ref — pruning
-     * on one of those erased every stored mark. The state map is tiny; keeping stale entries costs
-     * nothing next to losing review work.
-     */
-    private fun pruneIfTrustworthy(rebuild: Rebuild) {
-        val scopeChanged = lastPrunedScope != rebuild.scope
-        lastPrunedScope = rebuild.scope
-        if (scopeChanged) return
-
-        val results = rebuild.results
-        if (results.isEmpty()) return
-        if (results.any { it.error != null }) return
-        if (items.isEmpty()) return
-
-        // Only roots that actually resolved in this pass are eligible; a root that is absent
-        // entirely keeps its marks.
-        val resolvedRoots = results.mapTo(mutableSetOf()) { it.rootPath }
-        state.prune(items.mapTo(mutableSetOf()) { it.key }, resolvedRoots)
     }
 
     fun markCurrentReviewed() {

@@ -56,31 +56,44 @@ class ReviewStateServiceTest {
         assertFalse(service.isReviewed(item("b.kt", "h2")))
     }
 
+    /**
+     * Guards the decision to never prune stored marks.
+     *
+     * Marks are keyed by root + path and validated by content hash. Nothing about a key says which
+     * scope, or which rebuild, it belongs to — so a rebuild that does not contain a file says
+     * nothing about whether that file's mark is still wanted. It may be a different scope, a root
+     * that failed, or VCS mappings that have not initialised yet. Every attempt to prune on that
+     * basis has silently destroyed a user's review progress.
+     *
+     * If someone reintroduces pruning, this test is what fails.
+     */
     @Test
-    fun `prune drops keys not in the live set`() {
+    fun `marks survive a rebuild that does not contain them`() {
         val service = ReviewStateService()
-        service.markReviewed(item("a.kt", "h1"))
-        service.markReviewed(item("b.kt", "h2"))
-        service.prune(setOf(ReviewKey("/repo", "a.kt")), setOf("/repo"))
-        assertTrue(service.isReviewed(item("a.kt", "h1")))
-        assertFalse(service.isReviewed(item("b.kt", "h2")))
+        val staged = item("a.kt", "h1")
+        val alsoStaged = ReviewItem(ReviewKey("/other-root", "b.kt"), "h2")
+        service.markReviewed(staged)
+        service.markReviewed(alsoStaged)
+
+        // A rebuild in some other scope: a completely disjoint queue, and for a while no queue at
+        // all. Neither is allowed to touch what is stored.
+        val foreignScopeQueue = listOf(ReviewItem(ReviewKey("/repo", "unrelated.kt"), "h9"))
+        assertEquals(0, service.reviewedCount(foreignScopeQueue))
+        assertEquals(0, service.reviewedCount(emptyList()))
+
+        // The original files come back with unchanged content — the marks must still read reviewed.
+        assertTrue(service.isReviewed(staged))
+        assertTrue(service.isReviewed(alsoStaged))
+        assertEquals(2, service.reviewedCount(listOf(staged, alsoStaged)))
     }
 
     @Test
-    fun `prune leaves roots outside the prunable set untouched`() {
+    fun `a mark that outlived its file still only applies to identical content`() {
         val service = ReviewStateService()
         service.markReviewed(item("a.kt", "h1"))
-        service.markReviewed(ReviewItem(ReviewKey("/other", "b.kt"), "h2"))
-        service.prune(setOf(ReviewKey("/repo", "a.kt")), setOf("/repo"))
-        assertTrue(service.isReviewed(ReviewItem(ReviewKey("/other", "b.kt"), "h2")))
-    }
-
-    @Test
-    fun `prune with no prunable roots keeps everything`() {
-        val service = ReviewStateService()
-        service.markReviewed(item("a.kt", "h1"))
-        service.prune(emptySet(), emptySet())
+        // Retaining a stale entry is inert: it reads reviewed only for the exact content reviewed.
         assertTrue(service.isReviewed(item("a.kt", "h1")))
+        assertFalse(service.isReviewed(item("a.kt", "h1-edited")))
     }
 
     @Test
