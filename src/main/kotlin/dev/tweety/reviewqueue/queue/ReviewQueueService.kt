@@ -60,6 +60,7 @@ class ReviewQueueService(private val project: Project) {
 
     private val source = GitReviewSource(project)
     private val state get() = ReviewStateService.getInstance(project)
+    private val notifier = dev.tweety.reviewqueue.notify.CompletionNotifier(project)
     private val listeners = mutableListOf<() -> Unit>()
 
     private var scope: ReviewScope = ReviewScope.Staged
@@ -148,6 +149,7 @@ class ReviewQueueService(private val project: Project) {
     }
 
     private fun fireChanged() {
+        notifier.onSnapshot(snapshot())
         listeners.toList().forEach { it() }
     }
 
