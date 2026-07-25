@@ -66,6 +66,46 @@ class GitReviewSourceIntegrationTest : HeavyPlatformTestCase() {
         items.forEach { assertTrue(it.contentHash.isNotBlank()) }
     }
 
+    /**
+     * The product's central promise: a mark is addressed to content, so re-staging different bytes
+     * must return the file to the unreviewed set. Verified without any UI.
+     */
+    fun testStagedContentHashTracksStagedContent() {
+        val first = stagedHashOf("kept.txt")
+        assertFalse(
+            "content-addressing is inert: no bytes could be read for an ordinary staged file",
+            first.startsWith("unresolved:"),
+        )
+        assertEquals("re-resolving unchanged content must give the same hash", first, stagedHashOf("kept.txt"))
+
+        File(repoDir, "kept.txt").writeText("second staged change\n")
+        git("add", "kept.txt")
+        LocalFileSystem.getInstance().refreshAndFindFileByIoFile(repoDir)
+
+        val second = stagedHashOf("kept.txt")
+        assertFalse("content-addressing is inert after a rewrite", second.startsWith("unresolved:"))
+        assertFalse("rewriting and re-staging the file must change its hash", first == second)
+    }
+
+    fun testStagedDeletionHashesTheDeletedBytes() {
+        // -f because setUp leaves kept.txt with staged changes; the result is still a staged deletion.
+        git("rm", "-f", "kept.txt")
+        LocalFileSystem.getInstance().refreshAndFindFileByIoFile(repoDir)
+
+        val hash = stagedHashOf("kept.txt")
+        assertFalse("a staged deletion must hash the bytes that were deleted", hash.startsWith("unresolved:"))
+        // "original\n" is what HEAD holds for kept.txt, so the deletion hashes exactly those bytes.
+        assertEquals(dev.tweety.reviewqueue.core.ContentHasher.hash("original\n".toByteArray()), hash)
+    }
+
+    private fun stagedHashOf(relPath: String): String {
+        val results = GitReviewSource(project).resolve(ReviewScope.Staged)
+        assertEquals(1, results.size)
+        assertNull(results[0].error)
+        val items = results[0].changes.mapNotNull { ChangeMapper.toItem(results[0].rootPath, it) }
+        return items.single { it.key.relPath == relPath }.contentHash
+    }
+
     fun testUnknownRefInCommitRangeYieldsErrorNotException() {
         val results = GitReviewSource(project).resolve(ReviewScope.CommitRange("nope123", "HEAD"))
         assertEquals(1, results.size)
