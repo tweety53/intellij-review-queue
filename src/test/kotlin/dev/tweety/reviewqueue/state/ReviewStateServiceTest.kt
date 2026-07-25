@@ -57,15 +57,16 @@ class ReviewStateServiceTest {
     }
 
     /**
-     * Guards the decision to never prune stored marks.
+     * Pins the *storage-layer* half of the never-prune decision: reading the store — through
+     * `reviewedCount` or `isReviewed` — never mutates it, so no amount of querying with a queue
+     * that omits a file can cost that file its mark.
      *
-     * Marks are keyed by root + path and validated by content hash. Nothing about a key says which
-     * scope, or which rebuild, it belongs to — so a rebuild that does not contain a file says
-     * nothing about whether that file's mark is still wanted. It may be a different scope, a root
-     * that failed, or VCS mappings that have not initialised yet. Every attempt to prune on that
-     * basis has silently destroyed a user's review progress.
-     *
-     * If someone reintroduces pruning, this test is what fails.
+     * Scope: this covers pruning folded into `ReviewStateService`'s own read/write methods. It does
+     * **not** cover the call site where both real pruning bugs lived, which was
+     * `ReviewQueueService.applyRebuild`. That path is guarded by
+     * `dev.tweety.reviewqueue.queue.ReviewMarkRetentionTest`, which drives the real service through
+     * a scope switch and repeated refreshes; that is the test to look at if you are considering
+     * reintroducing pruning.
      */
     @Test
     fun `marks survive a rebuild that does not contain them`() {
