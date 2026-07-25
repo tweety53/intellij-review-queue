@@ -55,7 +55,10 @@ class ReviewQueueTree(
     /** The queue key for a change, resolved against the roots currently in the tree. */
     fun keyFor(change: Change): ReviewKey? {
         val path = (change.afterRevision ?: change.beforeRevision)?.file?.path ?: return null
-        val root = rootPaths.filter { path.startsWith(it) }.maxByOrNull { it.length } ?: return null
+        val root = rootPaths
+            .filter { path == it || path.startsWith("$it/") }
+            .maxByOrNull { it.length }
+            ?: return null
         return ReviewKey(root, path.removePrefix(root).removePrefix("/"))
     }
 
