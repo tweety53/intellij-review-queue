@@ -73,7 +73,8 @@ file to its previously reviewed bytes restores the mark.
 Because state is keyed by root, path, and hash — not by scope — a file reviewed under `Staged`
 still reads reviewed under `BranchVsBase` when the content is identical.
 
-Entries whose paths appear in no current queue are pruned on load, bounding state growth.
+Entries whose paths appear in no current queue are pruned on each queue rebuild, bounding state
+growth.
 
 ### `ReviewQueueService`
 
@@ -131,8 +132,9 @@ cannot repeat the balloon.
 ## Error handling
 
 Failures are per-root and non-fatal. A root that fails to resolve — detached HEAD, an unknown ref in
-a commit range, a git binary error — renders as a single error row beneath that root carrying the
-message, while every other root lists normally.
+a commit range, a git binary error — is reported on an error line beneath the tree, naming the root
+and the message, while every other root lists normally. The queue never fails as a whole because one
+root could not be read.
 
 Commit-range input is validated when entered, not at resolution time.
 
@@ -149,8 +151,7 @@ Automated tests cover logic, not Swing:
   the original bytes, assert reviewed again.
 - **Queue ordering and cursor** — multi-root fixtures asserting group order, mark-advance
   wrap-around, and cursor recovery when the current file leaves the queue.
-- **Persistence round-trip** — serialize and deserialize `ReviewStateService`, including
-  prune-on-load.
+- **Persistence round-trip** — serialize and deserialize `ReviewStateService`, including pruning.
 - **Notification arming** — fires once at completion and re-arms only after the queue goes
   incomplete.
 
