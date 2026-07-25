@@ -1,0 +1,18 @@
+<idea-plugin>
+    <id>dev.tweety.reviewqueue</id>
+    <name>Review Queue</name>
+    <vendor>tweety53</vendor>
+
+    <description><![CDATA[
+        Review the files in a staged diff, a branch-vs-base diff, or a commit range one at a time,
+        marking each as reviewed. Reviewed marks are content-addressed, so editing a file returns it
+        to the unreviewed set.
+    ]]></description>
+
+    <depends>com.intellij.modules.platform</depends>
+    <depends>Git4Idea</depends>
+
+    <extensions defaultExtensionNs="com.intellij">
+        <notificationGroup id="Review Queue" displayType="BALLOON"/>
+    </extensions>
+</idea-plugin>
