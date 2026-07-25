@@ -14,5 +14,12 @@
 
     <extensions defaultExtensionNs="com.intellij">
         <notificationGroup id="Review Queue" displayType="BALLOON"/>
+        <toolWindow id="Review Queue"
+                    anchor="right"
+                    factoryClass="dev.tweety.reviewqueue.ui.ReviewQueueToolWindowFactory"/>
     </extensions>
+
+    <actions>
+        <group id="ReviewQueue.Toolbar" class="com.intellij.openapi.actionSystem.DefaultActionGroup"/>
+    </actions>
 </idea-plugin>

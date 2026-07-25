@@ -22,6 +22,7 @@ dependencies {
         bundledModule("intellij.platform.vcs.dvcs")
         bundledModule("intellij.platform.vcs.dvcs.impl")
         bundledModule("intellij.platform.vcs.impl")
+        bundledModule("intellij.platform.vcs.impl.shared")
         bundledModule("intellij.platform.diff.impl")
         testFramework(TestFrameworkType.Platform)
     }
