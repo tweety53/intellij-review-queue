@@ -3,10 +3,10 @@ package dev.tweety.reviewqueue.queue
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.ModalityState
-import com.intellij.openapi.application.ReadAction
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
 import com.intellij.openapi.diagnostic.thisLogger
+import com.intellij.openapi.progress.ProcessCanceledException
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vcs.changes.Change
 import com.intellij.openapi.vcs.changes.ChangeListListener
@@ -23,6 +23,7 @@ import dev.tweety.reviewqueue.state.ReviewStateService
 import git4idea.repo.GitRepository
 import git4idea.repo.GitRepositoryChangeListener
 import java.util.IdentityHashMap
+import java.util.concurrent.atomic.AtomicLong
 
 data class QueueSnapshot(
     val items: List<ReviewItem>,
@@ -93,6 +94,13 @@ class ReviewQueueService(private val project: Project) : Disposable {
     private val notifier = dev.tweety.reviewqueue.notify.CompletionNotifier(project)
     private val listeners = mutableListOf<() -> Unit>()
 
+    /** Serialises rebuilds so two refreshes never resolve git concurrently for the same project. */
+    private val refreshExecutor =
+        AppExecutorUtil.createBoundedApplicationPoolExecutor("Review Queue refresh", 1)
+
+    /** Bumped per refresh request; a result whose generation is stale is discarded, not applied. */
+    private val refreshGeneration = AtomicLong(0)
+
     private var scope: ReviewScope = ReviewScope.Staged
     private var items: List<ReviewItem> = emptyList()
     private var errors: Map<String, String> = emptyMap()
@@ -124,23 +132,41 @@ class ReviewQueueService(private val project: Project) : Disposable {
 
     /**
      * Resolves the current scope off the EDT and applies the result on it: `getStatus` and the
-     * per-file content read are git subprocesses, which must never run on the EDT. `coalesceBy`
-     * also collapses refresh storms (every `changeListUpdateDone` lands here) into one round trip.
+     * per-file content read are git subprocesses, which must never run on the EDT.
+     *
+     * Deliberately NOT a `ReadAction.nonBlocking`. Resolving a scope needs no read lock, and the
+     * platform forbids waiting on a process under one — `OSProcessHandler.checkEdtAndReadAction`
+     * logs `Synchronous execution under ReadAction` and the refresh dies. An earlier version used
+     * a non-blocking read action to get off the EDT and hit exactly that.
+     *
+     * A single-thread executor serialises rebuilds; [refreshGeneration] replaces `coalesceBy`,
+     * collapsing refresh storms (every `changeListUpdateDone` lands here) by discarding any result
+     * a newer request has superseded — checked both before the work and before the apply.
      */
     fun refresh() {
         if (project.isDisposed) return
         val requestedScope = scope
-        ReadAction.nonBlocking<Rebuild> {
-            val results = source.resolve(requestedScope)
-            Rebuild(requestedScope, QueueAssembler.assemble(results, source.rootOrder()))
+        val generation = refreshGeneration.incrementAndGet()
+        refreshExecutor.execute {
+            if (project.isDisposed || generation != refreshGeneration.get()) return@execute
+            val rebuild = try {
+                val results = source.resolve(requestedScope)
+                Rebuild(requestedScope, QueueAssembler.assemble(results, source.rootOrder()))
+            } catch (e: ProcessCanceledException) {
+                throw e
+            } catch (e: Exception) {
+                thisLogger().warn("Review Queue refresh failed", e)
+                return@execute
+            }
+            ApplicationManager.getApplication().invokeLater(
+                { if (generation == refreshGeneration.get()) applyRebuild(rebuild) },
+                // Deliberately not ModalityState.any(): that would let the queue rebuild underneath
+                // the Commit Range input and the Reset All confirmation, changing what the user is
+                // deciding about while they decide. The apply waits until no modal dialog is up.
+                ModalityState.nonModal(),
+                project.disposed,
+            )
         }
-            .expireWith(this)
-            .coalesceBy(this)
-            // Deliberately not ModalityState.any(): that would let the queue rebuild underneath the
-            // Commit Range input and the Reset All confirmation, changing what the user is deciding
-            // about while they decide. The apply waits until no modal dialog is up.
-            .finishOnUiThread(ModalityState.nonModal()) { applyRebuild(it) }
-            .submit(AppExecutorUtil.getAppExecutorService())
     }
 
     private fun applyRebuild(rebuild: Rebuild) {
@@ -209,7 +235,11 @@ class ReviewQueueService(private val project: Project) : Disposable {
         com.intellij.openapi.util.Disposer.register(parent) { listeners.remove(listener) }
     }
 
-    override fun dispose() = Unit
+    override fun dispose() {
+        // Bumping the generation invalidates any in-flight result, so nothing applies after this.
+        refreshGeneration.incrementAndGet()
+        refreshExecutor.shutdownNow()
+    }
 
     private fun scheduleRefresh() {
         ApplicationManager.getApplication().invokeLater({ refresh() }, project.disposed)
