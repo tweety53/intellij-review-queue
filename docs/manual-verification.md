@@ -25,6 +25,14 @@ with staged, uncommitted changes. Do not modify anything under `/Users/tweety53/
 
 Open that worktree's directory as an IDE project.
 
+Before you touch anything else, capture the repository baseline that section 16 diffs against:
+
+```bash
+W=<worktree>            # and repeat for every submodule root
+{ git -C "$W" rev-parse HEAD; git -C "$W" status --porcelain; \
+  git -C "$W" stash list; git -C "$W" reflog | head; } > /tmp/review-queue-before.txt
+```
+
 ## 3. Tool window appears and lists staged files grouped by root
 
 1. Look for a **Review Queue** tab on the right-hand tool window bar. Click it open.
@@ -52,6 +60,12 @@ This is the plugin's central behavior and has not been observed running before t
      not to a random file, not staying on the same file.
 4. Repeat until every file is marked, confirming each step advances correctly and the last mark
    does not throw or freeze the UI.
+
+**Note on ordering:** the cursor advances in *queue* order — git roots in the order the repository
+manager reports them, then path order within each root. Under directory grouping the tree draws
+rows in a different visual order, so the next selection may not be the row directly below the one
+you just marked. That is expected; judge correctness against root-then-path order, not against
+what the tree looks like.
 
 ## 6. Diff tab is single and reused
 
@@ -110,7 +124,89 @@ This is the plugin's central behavior and has not been observed running before t
    **Expected:** the balloon fires again after going incomplete and complete again — it should
    not have fired a second time while still complete (e.g. from an unrelated Refresh click).
 
-## 11. Known, accepted behaviour — confirm you're fine with it
+## 11. Reviewed marks are never lost
+
+The stored marks are a user's review work. Nothing short of Reset All may destroy them. Each part
+below has previously been a real defect, so run all three.
+
+1. **Scope round trip.** With the Staged scope, mark several files reviewed and note exactly which.
+   Switch the scope to **Commit Range…** (`HEAD~1` → `HEAD`), then back to **Staged**.
+   **Expected:** every mark you noted is still there and the progress `N` is unchanged. Marks are
+   keyed by root/path/hash, so they carry across scopes.
+2. **Project close and reopen.** Leave the Review Queue tool window open, close the project
+   (File → Close Project), reopen it, and open the Review Queue.
+   **Expected:** the marks are present *before* you click Refresh, change scope, or touch anything
+   else. Check the label the moment the tree first populates.
+3. **A failing root.** Switch to **Branch vs Base…** and enter a ref that does not exist
+   (e.g. `no-such-ref-xyz`). The queue will show an error line.
+   **Expected:** the error is reported and the marks survive it. Switch back to **Staged**:
+   `N` is what it was before the bad ref.
+
+## 12. Error line: one failing root does not take down the others
+
+Needs a project with two git roots (a repo with a submodule, or two directory mappings).
+
+1. Point the scope at something one root can resolve and the other cannot — e.g. **Branch vs
+   Base…** with a ref that exists in only one root, or **Commit Range…** with a `from` ref that
+   only one root knows.
+2. **Expected:** the healthy root still lists its files normally in the tree, and the error line
+   under the progress label names *the failing root's path* alongside git's own message (not a
+   generic "Could not diff …"). The whole queue must not go blank.
+
+## 13. Staged deletion and binary file return to unreviewed
+
+This checks that marks are addressed to content and not to a constant.
+
+1. **Deletion.** In a scratch test repo, `git rm somefile.txt`. Refresh the queue; the deletion
+   appears as a row. Mark it reviewed. **Expected:** the row shows "✓ reviewed".
+   Now `git reset somefile.txt && git rm --cached otherfile.txt` (i.e. stage a *different*
+   deletion) and refresh. **Expected:** the new deletion is unreviewed — it did not inherit the
+   previous deletion's "reviewed" state.
+2. **Binary file.** Stage a PNG (`cp a.png img.png && git add img.png`). Mark it reviewed.
+   Replace it with a *different* PNG (`cp b.png img.png && git add img.png`) and refresh.
+   **Expected:** `img.png` returns to unreviewed. If it stays reviewed, the hash is not tracking
+   the file's bytes — report it.
+
+## 14. Nested root / submodule marks the file you selected
+
+Needs a project with a submodule (a git root nested inside another git root).
+
+1. Stage a change inside the submodule and a change to the submodule gitlink in the outer repo.
+2. Click the row for a file inside the submodule.
+3. Press **Mark Reviewed**.
+4. **Expected:** the "✓ reviewed" marker appears on **the row you selected**, and the progress
+   label increments by exactly 1. If the marker lands on a different file — or on no visible row
+   at all — stop and report it.
+
+## 15. Toggle Reviewed un-marks a single file
+
+1. Mark two or three files reviewed.
+2. Select one of them and click **Toggle Reviewed** in the toolbar.
+3. **Expected:** that file's "✓ reviewed" marker disappears, `N` decrements by 1, the other marks
+   are untouched, and the selection/cursor does **not** move.
+4. Click **Toggle Reviewed** again on the same file. **Expected:** it is marked again, cursor still
+   unmoved.
+5. With nothing selected (click empty space below the rows), **Expected:** the toolbar button is
+   disabled.
+
+## 16. No repository mutation
+
+The plugin issues read-only git queries only; nothing it does may change a repository.
+
+1. After finishing every section above, capture the same state you captured in section 2, for the
+   worktree and for every submodule root:
+
+```bash
+{ git -C "$W" rev-parse HEAD; git -C "$W" status --porcelain; \
+  git -C "$W" stash list; git -C "$W" reflog | head; } > /tmp/review-queue-after.txt
+diff /tmp/review-queue-before.txt /tmp/review-queue-after.txt
+```
+
+2. **Expected:** `diff` reports no differences at all. Any change to HEAD, to the index/worktree
+   status, to the stash list, or a new reflog entry means something mutated the repo — stop and
+   report it immediately.
+
+## 17. Known, accepted behaviour — confirm you're fine with it
 
 **Renames show as delete+add.** Rename detection is deliberately disabled. Stage a rename of a
 tracked file (`git mv old new && git add -A` in a scratch test repo, not in gymie) and open the
@@ -119,7 +215,7 @@ Staged scope.
 rename row. **Please confirm you find this acceptable** for Gate B review purposes (it is a
 known, intentional simplification, not a bug) — or note if it should be revisited.
 
-## 12. Known rough edge — judgment call requested
+## 18. Known rough edge — judgment call requested
 
 **Cursor relocation on rebuild.** When the queue is refreshed and the file that was selected is no
 longer in the list (e.g. its content changed since being marked, or the scope changed), the
@@ -133,6 +229,21 @@ different file occupying position 3.
 reviewed. This is intended behavior (keeps cursor movement predictable/local rather than jumping
 around), not a bug. **Please judge whether this feels right in practice** — flag it if it's
 disorienting enough to warrant a follow-up change.
+
+## 19. Read the IDE log — do this last
+
+Threading and re-entrancy defects often show up only as logged errors, with no visible symptom.
+Do not sign off without this step.
+
+1. **Help → Show Log in Finder** and open `idea.log` (use the log from the instance you just drove).
+2. Search the log for each of:
+   - `StackOverflowError` — a selection/refresh feedback cycle.
+   - `Slow operations are prohibited on EDT` — git subprocesses running on the UI thread.
+   - `com.intellij.diagnostic` entries mentioning `reviewqueue` — freeze reports attributed to
+     this plugin.
+   - `dev.tweety.reviewqueue` at `WARN`/`ERROR` — e.g. "no tree node for cursor key …" or
+     "duplicate entry for …", both of which indicate a real inconsistency.
+3. **Expected:** none of the above appear. Paste any hit verbatim into the sign-off notes.
 
 ---
 
@@ -151,5 +262,12 @@ the code — only from having done it in the IDE):
 - [ ] 8. Re-staging returns exactly the edited file
 - [ ] 9. Three scopes work; commit-range rejects space/`;`
 - [ ] 10. Completion balloon + clipboard copy verified
-- [ ] 11. Rename-as-delete+add — acceptable? (yes/no + comment)
-- [ ] 12. Cursor relocation — feels right? (yes/no + comment)
+- [ ] 11. Reviewed marks survive scope round trip, project reopen and a failing root
+- [ ] 12. One failing root reports its own error; other roots still list
+- [ ] 13. Staged deletion and binary file return to unreviewed on change
+- [ ] 14. Nested root/submodule — the file marked is the file selected
+- [ ] 15. Toggle Reviewed un-marks one file without moving the cursor
+- [ ] 16. `git` before/after diff is empty — no repository mutation
+- [ ] 17. Rename-as-delete+add — acceptable? (yes/no + comment)
+- [ ] 18. Cursor relocation — feels right? (yes/no + comment)
+- [ ] 19. idea.log read; no StackOverflowError / slow-EDT / reviewqueue diagnostics

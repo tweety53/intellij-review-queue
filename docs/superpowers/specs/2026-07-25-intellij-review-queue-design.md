@@ -89,10 +89,18 @@ queue and re-hashing on any VCS change.
 ### `ReviewQueuePanel`
 
 A `ChangesTree` subclass hosted in a right-docked tool window. Subclassing the platform tree
-inherits repo grouping, path shortening, file icons, and the standard context menu; the plugin adds
-a reviewed decorator (checkmark, dimmed label) and a `3 / 12 reviewed` progress label.
+inherits repo grouping, path shortening and file icons; the plugin adds a reviewed decorator
+(checkmark, dimmed label) and a `3 / 12 reviewed` progress label.
 
-Toolbar: scope selector, Mark reviewed, Refresh, Reset all. **Refresh** re-resolves and re-hashes
+Subclassing does **not** bring a context menu — `ChangesTree` installs none — and this plugin
+deliberately does not add one. `installPopupHandler`, subclassing `ChangesListView`, and publishing
+`VcsDataKeys.CHANGES` / `VcsDataKeys.SELECTED_CHANGES` from the tree would each make the standard
+VCS change actions, Rollback included, act on the review selection. The plugin must never mutate a
+repository, so the omission is a safety decision, not an oversight.
+
+Toolbar: scope selector, Mark reviewed, Toggle reviewed, Refresh, Reset all. **Toggle reviewed**
+adds or removes the mark on the selected row without moving the cursor, so a single file can be
+un-marked without Reset all destroying every mark. **Refresh** re-resolves and re-hashes
 the queue on demand, for the case where a change arrives without a VCS event. **Reset all** clears
 every stored mark for the current project after a confirmation prompt. The scope selector opens an
 input for the base ref or commit range when either of those scopes is chosen.
