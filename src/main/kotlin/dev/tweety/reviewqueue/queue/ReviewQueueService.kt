@@ -205,6 +205,13 @@ class ReviewQueueService(private val project: Project) : Disposable {
         fireChanged()
     }
 
+    /** Marks [key] reviewed at its current content hash. No-op when the key is not in the queue. */
+    fun markReviewed(key: ReviewKey) {
+        val item = items.firstOrNull { it.key == key } ?: return
+        state.markReviewed(item)
+        fireChanged()
+    }
+
     /**
      * Moves the cursor to [key]. A no-op when the cursor is already there — otherwise the tree's
      * selection listener and the tree refresh that follows `fireChanged()` feed each other.
