@@ -25,15 +25,20 @@ object BranchNameParser {
  */
 class CompletionNotifier(private val project: Project) {
 
-    private var armed = true
+    /**
+     * `null` until the first snapshot, which seeds it. Starting armed would fire the balloon again
+     * every time a project whose queue is already fully reviewed is reopened.
+     */
+    private var armed: Boolean? = null
 
     fun onSnapshot(snapshot: QueueSnapshot) {
         val complete = snapshot.items.isNotEmpty() && snapshot.reviewedCount == snapshot.items.size
+        if (armed == null) armed = !complete
         if (!complete) {
             armed = true
             return
         }
-        if (!armed) return
+        if (armed != true) return
         armed = false
         notifyComplete(snapshot.items.size)
     }
