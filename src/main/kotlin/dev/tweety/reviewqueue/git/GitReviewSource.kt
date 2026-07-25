@@ -1,5 +1,6 @@
 package dev.tweety.reviewqueue.git
 
+import com.intellij.openapi.progress.ProcessCanceledException
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vcs.VcsException
 import com.intellij.openapi.vcs.changes.Change
@@ -31,7 +32,11 @@ class GitReviewSource(private val project: Project) {
         val rootPath = repository.root.path
         try {
             RootResult(rootPath, resolveInRoot(repository, scope), null)
+        } catch (e: ProcessCanceledException) {
+            throw e
         } catch (e: VcsException) {
+            RootResult(rootPath, emptyList(), e.message ?: "Failed to read changes")
+        } catch (e: Exception) {
             RootResult(rootPath, emptyList(), e.message ?: "Failed to read changes")
         }
     }
