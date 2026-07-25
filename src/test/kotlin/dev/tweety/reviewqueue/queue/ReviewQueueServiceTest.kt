@@ -12,15 +12,15 @@ class ReviewQueueServiceTest {
             RootResult("/a", emptyList(), "boom"),
             RootResult("/b", emptyList(), null),
         )
-        val (items, errors) = QueueAssembler.assemble(results, listOf("/a", "/b"))
-        assertTrue(items.isEmpty())
-        assertEquals(mapOf("/a" to "boom"), errors)
+        val assembled = QueueAssembler.assemble(results, listOf("/a", "/b"))
+        assertTrue(assembled.items.isEmpty())
+        assertEquals(mapOf("/a" to "boom"), assembled.errors)
     }
 
     @Test
     fun `assemble returns no errors when every root succeeds`() {
         val results = listOf(RootResult("/a", emptyList(), null))
-        val (_, errors) = QueueAssembler.assemble(results, listOf("/a"))
-        assertTrue(errors.isEmpty())
+        val assembled = QueueAssembler.assemble(results, listOf("/a"))
+        assertTrue(assembled.errors.isEmpty())
     }
 }

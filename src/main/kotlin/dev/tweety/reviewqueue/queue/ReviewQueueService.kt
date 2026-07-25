@@ -27,17 +27,27 @@ data class QueueSnapshot(
     val scope: ReviewScope,
 )
 
-/** Turns per-root results into an ordered queue plus a per-root error map. */
+/** Turns per-root results into an ordered queue, a per-root error map, and the change lookup — in a single pass over each change. */
 object QueueAssembler {
+    data class Assembled(
+        val items: List<ReviewItem>,
+        val errors: Map<String, String>,
+        val changesByKey: Map<ReviewKey, Change>,
+    )
+
     fun assemble(
         results: List<RootResult>,
         rootOrder: List<String>,
-    ): Pair<List<ReviewItem>, Map<String, String>> {
+    ): Assembled {
         val errors = results.mapNotNull { r -> r.error?.let { r.rootPath to it } }.toMap()
-        val items = results.flatMap { result ->
-            result.changes.mapNotNull { ChangeMapper.toItem(result.rootPath, it) }
+        val pairs = results.flatMap { result ->
+            result.changes.mapNotNull { change ->
+                ChangeMapper.toItem(result.rootPath, change)?.let { item -> item to change }
+            }
         }
-        return ReviewOrdering.order(items, rootOrder) to errors
+        val items = ReviewOrdering.order(pairs.map { it.first }, rootOrder)
+        val changesByKey = pairs.associate { (item, change) -> item.key to change }
+        return Assembled(items, errors, changesByKey)
     }
 }
 
@@ -80,15 +90,11 @@ class ReviewQueueService(private val project: Project) {
 
         val results = source.resolve(scope)
         val rootOrder = source.rootOrder()
-        val (newItems, newErrors) = QueueAssembler.assemble(results, rootOrder)
+        val assembled = QueueAssembler.assemble(results, rootOrder)
 
-        items = newItems
-        errors = newErrors
-        changesByKey = results.flatMap { result ->
-            result.changes.mapNotNull { change ->
-                ChangeMapper.toItem(result.rootPath, change)?.let { it.key to change }
-            }
-        }.toMap()
+        items = assembled.items
+        errors = assembled.errors
+        changesByKey = assembled.changesByKey
 
         state.prune(items.mapTo(mutableSetOf()) { it.key })
 
