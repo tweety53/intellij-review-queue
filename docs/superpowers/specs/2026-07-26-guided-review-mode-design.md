@@ -81,17 +81,29 @@ cleared.
 
 ### `ReviewDiffPresenter` — replaces `ReviewDiffOpener`
 
-Builds one `ChangeDiffRequestChain` for the session's files, attaches **Mark Reviewed** and **Exit
-Review** through `DiffUserDataKeys.CONTEXT_ACTIONS`, opens it as a single diff tab, advances with
-`CacheDiffRequestChainProcessor.setCurrentRequest(index)`, and closes the tab when the session ends.
-The tab title carries progress: `Review 3/12 — GitReviewSource.kt`.
+Owns the diff tab for the session's lifetime. It attaches the four session actions through
+`DiffUserDataKeys.CONTEXT_ACTIONS`, shows the file at the session's current index, and closes the
+tab when the session ends. The tab title carries progress: `Review 3/12 — GitReviewSource.kt`.
 
 `DiffChainPlanner` — the pure pairing/filter/index logic already extracted and unit-tested — is
 reused unchanged.
 
-**Fallback:** if obtaining the processor to call `setCurrentRequest` proves impractical, close the
-current diff tab and open the next file's. That is fully controllable at the cost of a visible
-flicker per file, and is a drop-in substitution behind `ReviewDiffPresenter`'s interface.
+**Mechanism: one diff file per step, replacing the previous one.** Moving to another file closes
+the current diff editor tab and opens the next.
+
+This is a deliberate reversal of the approach originally chosen. The first plan was to open one
+`ChangeDiffRequestChain` for the whole session and advance inside it with
+`CacheDiffRequestChainProcessor.setCurrentRequest(index)`. That method is public, but **the
+processor is not reachable from an action through public API**: `DiffDataKeys` (in
+`com.intellij.diff.tools.util`) exposes only `DIFF_CONTEXT` and `DIFF_VIEWER`, and
+`DiffRequestProcessor` implements just `DiffEditorViewer` and `CheckedDisposable` — it publishes no
+data key and no accessor. Reaching it would require reflection or casting into `impl` internals,
+which is precisely the kind of coupling that breaks on a platform upgrade.
+
+The cost is a visible tab swap per file instead of an in-place change. The benefit is that every
+transition is fully under our control and depends on nothing internal. If a supported way to drive
+a single tab is found later, it substitutes behind `ReviewDiffPresenter` without touching
+`ReviewSession` or the actions.
 
 ### Actions
 
