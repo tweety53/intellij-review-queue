@@ -20,19 +20,31 @@ Branch vs Base, or an explicit Commit Range. The Commit Range dialog rejects ref
 space or `;`.
 
 Press **Start Review** to begin a guided pass over everything still unreviewed in that scope. This
-hides the Project and Review Queue tool windows and opens the first file as a diff, with the
-review actions on the diff viewer's own toolbar:
+hides the Project and Review Queue tool windows and opens the first file as a diff.
 
-- **Mark Reviewed** (also <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Space</kbd>) — marks the file on
-  screen reviewed and opens the next unreviewed one. Advancing **replaces** the diff tab rather
-  than opening a new one, so there is only ever one review tab.
-- **Previous File** — steps back to the file shown before this one, without changing any mark.
-  Use it together with **Toggle Reviewed** to fix a mis-mark: step back, toggle the wrong mark
-  off, then Mark Reviewed to continue from there.
+The diff viewer's own toolbar carries two groups. On the left, the actions for the file on screen:
+
+- **Show File List** — every file in the scope with its reviewed state, without leaving the pass.
+  Picking a file in the pass jumps the diff to it; picking one that was already reviewed when the
+  pass started opens it as a separate browsing diff and leaves the pass alone.
+- **Mark Reviewed** (also <kbd>Cmd</kbd>+<kbd>Shift</kbd>+<kbd>Space</kbd> on macOS,
+  <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>Space</kbd> on Windows and Linux) — marks the
+  file on screen reviewed and opens the next unreviewed one. Advancing **replaces** the diff tab
+  rather than opening a new one, so there is only ever one review tab.
+- **Previous File** — steps back to the file shown before this one, without changing any mark. Use
+  it together with **Toggle Reviewed** to fix a mis-mark: step back, toggle the wrong mark off, then
+  Mark Reviewed to continue from there.
 - **Toggle Reviewed** — adds or removes the reviewed mark on the file currently on screen without
   moving to another file.
-- **End Review** — leaves the guided pass early. Every mark made so far is kept, and both tool
-  windows are restored. Closing the review diff tab by hand does the same thing.
+
+Right-aligned on the same toolbar, the session and queue controls — **Start Review**, **End
+Review**, **Refresh** and **Reset All**, the same four as in the tool window. A pass hides the tool
+window, so these are how you reach them without ending it. Each one **asks before acting**: they sit
+directly above the code you are reading, where an accidental press is expensive. The tool-window
+copies are unchanged — only Reset All confirms there.
+
+**End Review** leaves the guided pass early. Every mark made so far is kept, and both tool windows
+are restored. Closing the review diff tab by hand does the same thing.
 
 The diff tab's title tracks progress as `Review N/M - filename`. Marking the last file restores
 both tool windows automatically and fires the completion balloon.
@@ -84,8 +96,9 @@ IntelliJ IDEA Ultimate 2026.2 or newer (build 262+), with the bundled Git4Idea p
   fails there with "could not create image from display"), so it could only confirm that the
   plugin loads cleanly — `dev.tweety.reviewqueue` does not appear in the platform's "Problems
   found loading plugins" block and nothing else in the log mentions the plugin. No UI interaction
-  was possible in that environment: whether the four diff-toolbar actions
-  (`DiffUserDataKeys.CONTEXT_ACTIONS` on the chain, see `EditorTabDiffPresenter`) actually render,
-  and every other guided-review interaction, remains **unverified by a human**. See
+  was possible in that environment: whether the diff toolbar's two groups
+  (`DiffUserDataKeys.CONTEXT_ACTIONS` on the chain, see `EditorTabDiffPresenter`) actually render as
+  designed — including whether the right-hand group renders flush right — and every other
+  guided-review interaction, remains **unverified by a human**. See
   `docs/manual-verification.md` for the checklist a human with a real display must run before
   relying on this plugin — section 20 covers the guided review flow specifically.

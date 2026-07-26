@@ -80,7 +80,9 @@ interface the toolbar layout honours. It is present in 2026.2 (`lib/intellij.pla
 **Known risk.** Whether the *diff viewer's* toolbar honours the marker is unverified — it is an
 `ActionToolbarImpl`, which does, but the diff framework builds it. The first implementation step is
 to confirm this visually. If it does not hold, the fallback is a `Separator` ahead of the group:
-visually grouped, not flush right.
+visually grouped, not flush right. This visual check requires a human driving the IDE and has not
+been performed; it remains outstanding and is tracked in `docs/manual-verification.md` for a human
+to run.
 
 ### Confirmation belongs to the diff window
 
