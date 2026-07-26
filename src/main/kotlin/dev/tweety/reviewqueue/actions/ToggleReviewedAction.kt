@@ -1,5 +1,6 @@
 package dev.tweety.reviewqueue.actions
 
+import com.intellij.diff.tools.util.DiffDataKeys
 import com.intellij.icons.AllIcons
 import com.intellij.openapi.actionSystem.ActionUpdateThread
 import com.intellij.openapi.actionSystem.AnAction
@@ -23,7 +24,10 @@ class ToggleReviewedAction : AnAction(
     override fun update(e: AnActionEvent) {
         val project = e.getData(CommonDataKeys.PROJECT)
         val service = project?.let { ReviewSessionService.getInstance(it) }
-        e.presentation.isEnabled = service != null && service.isActive && service.currentKey() != null
+        // Diff-viewer only: this acts on the file the diff is showing, so it has no meaning in a
+        // normal editor even while a session is running.
+        e.presentation.isEnabled = service != null && service.isActive && service.currentKey() != null &&
+            e.getData(DiffDataKeys.DIFF_CONTEXT) != null
     }
 
     override fun actionPerformed(e: AnActionEvent) {

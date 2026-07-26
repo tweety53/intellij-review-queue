@@ -12,6 +12,7 @@ import dev.tweety.reviewqueue.model.CommitRangeValidator
 import dev.tweety.reviewqueue.model.ReviewScope
 import dev.tweety.reviewqueue.model.displayName
 import dev.tweety.reviewqueue.queue.ReviewQueueService
+import dev.tweety.reviewqueue.queue.ReviewSessionService
 import javax.swing.JComponent
 
 /** Toolbar dropdown choosing the review scope, prompting for refs where a scope needs them. */
@@ -23,6 +24,10 @@ class ScopeSelector : ComboBoxAction() {
         val project = e.getData(CommonDataKeys.PROJECT)
         val scope = project?.let { ReviewQueueService.getInstance(it).snapshot().scope }
         e.presentation.text = scope?.displayName() ?: "Scope"
+        // Changing the scope mid-pass would rebuild the queue underneath the session's fixed file
+        // list, so the selector is inactive while a review is running.
+        e.presentation.isEnabled =
+            project != null && !ReviewSessionService.getInstance(project).isActive
     }
 
     override fun createPopupActionGroup(button: JComponent, context: com.intellij.openapi.actionSystem.DataContext): DefaultActionGroup {
