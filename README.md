@@ -30,17 +30,25 @@ The diff viewer's own toolbar carries two groups. On the left, the actions for t
 - **Previous File** — steps back to the file shown before this one, without changing any mark. Use
   it together with **Toggle Reviewed** to fix a mis-mark: step back, toggle the wrong mark off, then
   Mark Reviewed to continue from there.
-- **Mark Reviewed** (also <kbd>Cmd</kbd>+<kbd>Shift</kbd>+<kbd>Enter</kbd> on macOS,
-  <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Enter</kbd> on Windows and Linux) — marks the file on screen
-  reviewed and opens the next unreviewed one. Advancing **replaces** the diff tab rather than opening
-  a new one, so there is only ever one review tab.
+- **Mark Reviewed** — marks the file on screen reviewed and opens the next unreviewed one. Advancing
+  **replaces** the diff tab rather than opening a new one, so there is only ever one review tab.
 
-  On Windows and Linux this chord is shared with **Complete Current Statement**. That is deliberate
-  and safe here: Mark Reviewed is enabled only inside the review diff viewer, whose editors are
-  read-only, so the two never compete for the chord. If an ambiguity popup ever appears, that is the
-  cause.
+  Four chords are bound, so it is reachable wherever your hand happens to be resting:
 
-  **If you rebind this, avoid the space bar.** Two earlier attempts used it and both failed:
+  | | macOS | Windows / Linux |
+  | --- | --- | --- |
+  | | <kbd>⌥</kbd><kbd>⇧</kbd><kbd>Z</kbd> | <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>Z</kbd> |
+  | | <kbd>⌘</kbd><kbd>⇧</kbd><kbd>Z</kbd> | <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Z</kbd> |
+  | | <kbd>⌥</kbd><kbd>⇧</kbd><kbd>Space</kbd> | <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>Space</kbd> |
+  | | <kbd>⌥</kbd><kbd>⇧</kbd><kbd>Enter</kbd> | <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>Enter</kbd> |
+
+  Two of these are deliberately shared with bundled actions: **Ctrl+Shift+Z is Redo** (Windows and
+  Linux only — macOS gets Cmd+Shift+Z instead and drops the Ctrl form), and **Alt+Shift+Enter is
+  Split Chooser** and a Database/Grid binding. That is safe here because Mark Reviewed is enabled only
+  inside the review diff viewer, whose editors are read-only, so the bundled actions are disabled
+  exactly where this one is live. If an ambiguity popup ever appears, these are the two to suspect.
+
+  **If you rebind this, avoid the space bar except as Alt+Shift+Space.** Two earlier attempts failed:
   <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Space</kbd> is Smart Type Completion in the bundled keymaps,
   and on macOS the entire Cmd+Space family is swallowed by input-source switching as soon as a second
   input source is installed — the OS takes the key before the IDE ever sees it.

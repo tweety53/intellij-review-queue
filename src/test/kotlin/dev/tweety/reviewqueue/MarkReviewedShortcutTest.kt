@@ -6,12 +6,16 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * Pins the Mark Reviewed key binding, and each way of getting it wrong that has already happened.
+ * Pins the Mark Reviewed key bindings, and each way of getting them wrong that has already happened.
  *
  * Reads the shipped resource rather than the platform's keymap registry, so it needs no IDE. It
  * asserts on attribute values rather than whole tags: `patchPluginXml` re-serialises the descriptor
  * and inserts a space before `/>`, and a test that pins that whitespace fails on a serializer change
  * for a reason that has nothing to do with the shortcut.
+ *
+ * Four chords are bound, on request, so the action is reachable however the reader's hand happens to
+ * be resting. Two of them are knowingly shared with bundled actions; see the collision tests, which
+ * exist so the trade stays visible instead of being rediscovered.
  */
 class MarkReviewedShortcutTest {
 
@@ -25,78 +29,93 @@ class MarkReviewedShortcutTest {
             ?.value
             ?: error("no ReviewQueue.MarkReviewed action block in plugin.xml")
 
-    private val shortcut: String =
-        Regex("""<keyboard-shortcut[^/]*/>""")
-            .find(markReviewedBlock)
-            ?.value
-            ?: error("no keyboard-shortcut in:\n$markReviewedBlock")
+    private val declarations: List<String> =
+        Regex("""<keyboard-shortcut[^/]*/>""").findAll(markReviewedBlock).map { it.value }.toList()
 
-    private val macShortcut: String =
-        Regex("""<keyboard-shortcut keymap="Mac OS X 10\.5\+"[^/]*/>""")
-            .find(markReviewedBlock)
-            ?.value
-            ?: error("no macOS keyboard-shortcut in:\n$markReviewedBlock")
+    private fun forKeymap(keymap: String): List<String> =
+        declarations.filter { it.contains("""keymap="$keymap"""") }
 
-    @Test
-    fun `two declarations, one per platform`() {
-        assertEquals(2, Regex("<keyboard-shortcut").findAll(markReviewedBlock).count())
-        assertTrue(shortcut, shortcut.contains("""keymap="${'$'}default""""))
-    }
+    private val defaults: List<String> get() = forKeymap("${'$'}default")
+    private val mac: List<String> get() = forKeymap("Mac OS X 10.5+")
+
+    private fun chords(decls: List<String>): Set<String> =
+        decls.mapNotNull { Regex("""first-keystroke="([^"]+)"""").find(it)?.groupValues?.get(1) }.toSet()
 
     @Test
-    fun `windows and linux get ctrl shift ENTER`() {
-        assertTrue(shortcut, shortcut.contains("""first-keystroke="control shift ENTER""""))
-    }
-
-    /**
-     * Cmd+Shift+Enter, verified free in both bundled keymaps and in every plugin bundled with
-     * 2026.2. `replace-all` is what stops macOS also inheriting the `$default` chord, which is a
-     * bundled action there (see [the collision test][ctrlShiftEnterShadowsCompleteCurrentStatement]).
-     */
-    @Test
-    fun `macOS gets cmd shift ENTER and does not inherit the default chord`() {
-        assertTrue(macShortcut, macShortcut.contains("""first-keystroke="meta shift ENTER""""))
-        assertTrue(
-            "without replace-all macOS would also answer to the \$default chord, which is " +
-                "EditorCompleteStatement there",
-            macShortcut.contains("""replace-all="true""""),
+    fun `the default keymap binds all four platform-neutral chords`() {
+        assertEquals(
+            markReviewedBlock,
+            setOf("alt shift Z", "alt shift SPACE", "alt shift ENTER", "control shift Z"),
+            chords(defaults),
         )
     }
 
     /**
-     * `ctrl shift SPACE` is SmartTypeCompletion in both bundled keymaps, and on macOS the whole
-     * Cmd+Space family is consumed by input-source switching once more than one source is installed
-     * — the OS takes the key before the IDE sees it, which no amount of keymap wrangling fixes.
+     * macOS gets Cmd+Shift+Z in place of Ctrl+Shift+Z. The `remove` entry is load-bearing: a plugin
+     * `<keyboard-shortcut>` on a child keymap *adds* to what that keymap inherits rather than
+     * replacing it, so without the removal macOS would answer to Ctrl+Shift+Z as well — which is
+     * `$Redo` there.
      */
     @Test
-    fun `no binding uses the space key`() {
-        // Scoped to the bindings, not the whole action block: the block carries a comment that names
-        // SPACE to explain why it is avoided, and that comment must not fail this test.
-        assertFalse(
-            "SPACE chords have failed twice: SmartTypeCompletion, then macOS input-source switching",
-            shortcut.contains("SPACE") || macShortcut.contains("SPACE"),
+    fun `macOS swaps the ctrl chord for the cmd chord`() {
+        assertTrue(mac.toString(), chords(mac).contains("meta shift Z"))
+        val removal = mac.single { it.contains("""remove="true"""") }
+        assertTrue(
+            "macOS must drop the inherited Ctrl+Shift+Z, which is \$Redo there",
+            removal.contains("""first-keystroke="control shift Z""""),
+        )
+    }
+
+    @Test
+    fun `macOS does not also keep the ctrl chord as an active binding`() {
+        val active = mac.filterNot { it.contains("""remove="true"""") }
+        assertFalse(active.toString(), chords(active).contains("control shift Z"))
+    }
+
+    /**
+     * `ctrl shift SPACE` is SmartTypeCompletion in both bundled keymaps, and the macOS Cmd+Space
+     * family is consumed by input-source switching before the IDE sees the key. `alt shift SPACE` is
+     * neither: it is free in both bundled keymaps and in every bundled plugin, and was confirmed
+     * working by hand.
+     */
+    @Test
+    fun `the only space chord is the one verified to survive`() {
+        val spaceChords = chords(declarations).filter { it.contains("SPACE") }
+        assertEquals(listOf("alt shift SPACE"), spaceChords)
+    }
+
+    @Test
+    fun `no binding targets a keymap the platform will not recognise`() {
+        val keymaps = declarations.mapNotNull { Regex("""keymap="([^"]+)"""").find(it)?.groupValues?.get(1) }
+        assertEquals(
+            "\$default and Mac OS X 10.5+ are the only names in play; " +
+                "DefaultKeymap.getDefaultKeymapName() returns the latter verbatim on macOS",
+            setOf("${'$'}default", "Mac OS X 10.5+"),
+            keymaps.toSet(),
         )
     }
 
     /**
-     * Documents a known, accepted collision rather than pretending it is absent.
+     * Documents two accepted collisions rather than pretending they are absent.
      *
-     * `control shift ENTER` is `EditorCompleteStatement` in `keymaps/$default.xml`, and the macOS
-     * keymap does not redeclare that action — so Complete Current Statement answers to
-     * Ctrl+Shift+Enter on every platform, macOS included. Mark Reviewed is chosen deliberately
-     * anyway: `MarkReviewedAction.update` enables it only inside the review diff viewer, where the
-     * editors are read-only and Complete Current Statement is disabled, so the two do not compete
-     * for the chord in practice.
+     * - `control shift Z` is `$Redo` in `keymaps/$default.xml`, and the macOS keymap never redeclares
+     *   `$Redo`, so Redo answers to Ctrl+Shift+Z on every platform. macOS avoids the clash by the
+     *   removal above; Windows and Linux keep it.
+     * - `alt shift ENTER` is `SplitChooser` in `$default`, and the Database/Grid plugin binds it too.
      *
-     * This test exists so the trade is visible. If an ambiguity popup ever appears on Windows or
-     * Linux, this is the reason and the fix is to give `$default` a chord of its own.
+     * Both are tolerable because `MarkReviewedAction.update` enables the action only inside the
+     * review diff viewer, whose editors are read-only — so the bundled actions are disabled exactly
+     * where this one is live. If an ambiguity popup ever appears, these are the chords to suspect.
      */
     @Test
-    fun ctrlShiftEnterShadowsCompleteCurrentStatement() {
+    fun `the knowingly shared chords are still the ones we think they are`() {
         assertTrue(
-            "the \$default chord is knowingly shared with EditorCompleteStatement; if this changes, " +
-                "revisit the comment on this test",
-            shortcut.contains("""first-keystroke="control shift ENTER""""),
+            "Ctrl+Shift+Z is shared with \$Redo on Windows and Linux",
+            chords(defaults).contains("control shift Z"),
+        )
+        assertTrue(
+            "Alt+Shift+Enter is shared with SplitChooser and the Grid plugin",
+            chords(defaults).contains("alt shift ENTER"),
         )
     }
 }
