@@ -77,12 +77,19 @@ the confirmed one and vice versa.
 Right alignment comes from `com.intellij.openapi.actionSystem.RightAlignedToolbarAction`, a marker
 interface the toolbar layout honours. It is present in 2026.2 (`lib/intellij.platform.editor.ui.jar`).
 
-**Known risk.** Whether the *diff viewer's* toolbar honours the marker is unverified — it is an
-`ActionToolbarImpl`, which does, but the diff framework builds it. The first implementation step is
-to confirm this visually. If it does not hold, the fallback is a `Separator` ahead of the group:
-visually grouped, not flush right. This visual check requires a human driving the IDE and has not
-been performed; it remains outstanding and is tracked in `docs/manual-verification.md` for a human
-to run.
+**Known risk — resolved, unfavourably.** Confirmed by reading 2026.2 platform bytecode, not by a
+visual check: `RightAlignedToolbarAction` *is* honoured by `ActionToolbarImpl.fillToolBar`, and
+`DiffRequestProcessor.collectToolbarActions` does put `CONTEXT_ACTIONS` into an `ActionToolbarImpl`.
+But `DiffHeaderToolbarUtil.createLayoutPanel` places that toolbar with
+`align(AlignX.LEFT + AlignY.CENTER).resizableColumn()`. `AlignX.LEFT` anchors the component at its
+preferred width on the left; the toolbar's own right edge sits immediately after its last button, so
+there is no right edge inside the surrounding panel to push the four controls toward. Flush-right
+alignment is therefore not achievable in this toolbar as laid out today.
+
+The fallback named above shipped as a result: a `Separator` between the navigation group and the
+four session controls, giving visual grouping instead of flush-right placement. The
+`RightAlignedToolbarAction` markers stay on the four actions — they are harmless, they document the
+original intent, and they would take effect unchanged if `createLayoutPanel`'s layout ever changes.
 
 ### Confirmation belongs to the diff window
 
@@ -117,7 +124,9 @@ does not become a live unconfirmed press if that ever changes.
 `DiffResetAllAction` adds only the marker interface. `ResetAllAction.actionPerformed` already
 confirms, and overriding it would produce two dialogs.
 
-The four existing action classes gain `open` on the class and on `actionPerformed`. The shared
+The four existing action classes gain `open` on the class. `actionPerformed` needs no change to
+become overridable — it is already an override of an abstract method, which is open by construction.
+The shared
 `confirmed(project, message, title): Boolean` helper lands in `actions/Confirm.kt`, and
 `ResetAllAction` is rewritten to use it so there is one confirmation shape in the plugin.
 

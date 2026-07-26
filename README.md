@@ -27,21 +27,23 @@ The diff viewer's own toolbar carries two groups. On the left, the actions for t
 - **Show File List** — every file in the scope with its reviewed state, without leaving the pass.
   Picking a file in the pass jumps the diff to it; picking one that was already reviewed when the
   pass started opens it as a separate browsing diff and leaves the pass alone.
+- **Previous File** — steps back to the file shown before this one, without changing any mark. Use
+  it together with **Toggle Reviewed** to fix a mis-mark: step back, toggle the wrong mark off, then
+  Mark Reviewed to continue from there.
 - **Mark Reviewed** (also <kbd>Cmd</kbd>+<kbd>Shift</kbd>+<kbd>Space</kbd> on macOS,
   <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>Space</kbd> on Windows and Linux) — marks the
   file on screen reviewed and opens the next unreviewed one. Advancing **replaces** the diff tab
   rather than opening a new one, so there is only ever one review tab.
-- **Previous File** — steps back to the file shown before this one, without changing any mark. Use
-  it together with **Toggle Reviewed** to fix a mis-mark: step back, toggle the wrong mark off, then
-  Mark Reviewed to continue from there.
 - **Toggle Reviewed** — adds or removes the reviewed mark on the file currently on screen without
   moving to another file.
 
-Right-aligned on the same toolbar, the session and queue controls — **Start Review**, **End
-Review**, **Refresh** and **Reset All**, the same four as in the tool window. A pass hides the tool
-window, so these are how you reach them without ending it. Each one **asks before acting**: they sit
-directly above the code you are reading, where an accidental press is expensive. The tool-window
-copies are unchanged — only Reset All confirms there.
+A separator, then the session and queue controls on the same toolbar — **Start Review**, **End
+Review**, **Refresh** and **Reset All**, the same four as in the tool window. Refresh and Reset All
+are how you reach those two without ending the pass, since a pass hides the tool window. Start
+Review appears here too, for symmetry with the tool-window group, but shows up greyed out during a
+pass — the same as the tool window's own copy — because a pass is already running. Each one **asks
+before acting**: they sit directly above the code you are reading, where an accidental press is
+expensive. The tool-window copies are unchanged — only Reset All confirms there.
 
 **End Review** leaves the guided pass early. Every mark made so far is kept, and both tool windows
 are restored. Closing the review diff tab by hand does the same thing.

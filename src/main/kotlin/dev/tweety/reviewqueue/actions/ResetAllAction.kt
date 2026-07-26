@@ -8,7 +8,9 @@ import com.intellij.openapi.actionSystem.CommonDataKeys
 import dev.tweety.reviewqueue.queue.ReviewQueueService
 
 /** Clears every stored reviewed mark for this project, after confirmation. */
-open class ResetAllAction : AnAction("Reset All", "Clear every reviewed mark in this project", AllIcons.Actions.Rollback) {
+// AllIcons.General.Reset, not Actions.Rollback: this plugin never mutates a repository, and a
+// rollback arrow directly above a diff reads as "revert these changes" rather than "clear marks".
+open class ResetAllAction : AnAction("Reset All", "Clear every reviewed mark in this project", AllIcons.General.Reset) {
 
     override fun getActionUpdateThread() = ActionUpdateThread.EDT
 

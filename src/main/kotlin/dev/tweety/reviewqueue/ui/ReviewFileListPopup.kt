@@ -31,6 +31,9 @@ object ReviewFileListPopup {
             reviewed = { queue.isReviewed(it) },
             current = session.currentKey(),
         )
+        // ShowFileListAction.update() already keeps the button disabled when the snapshot is empty;
+        // this is a defensive no-op for the race where the queue empties between that update and the
+        // click landing here, so this stays cheap rather than duplicating the emptiness message.
         if (rows.isEmpty()) return
 
         JBPopupFactory.getInstance()
@@ -55,6 +58,13 @@ object ReviewFileListPopup {
         queue: ReviewQueueService,
         row: ReviewFileRow,
     ) {
+        // Picking the file already on screen must not touch the tab: jumpTo -> showCurrent() ->
+        // EditorTabDiffPresenter.show closes and reopens it, which loses scroll position for no
+        // reason the user asked for. This guard belongs here rather than in
+        // ReviewSessionService.jumpTo: only the popup knows the pick was a no-op from the user's
+        // point of view. A self-jump reached through jumpTo any other way — e.g. the current file
+        // having left the queue — should still re-settle, and jumpTo needs to keep doing that.
+        if (row.isCurrent) return
         // jumpTo refuses anything outside the pass, which is the signal to browse instead of
         // reshuffling what the reviewer is walking through.
         if (session.jumpTo(row.key)) return

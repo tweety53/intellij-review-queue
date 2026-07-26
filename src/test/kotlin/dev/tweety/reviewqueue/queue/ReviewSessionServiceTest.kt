@@ -5,6 +5,7 @@ import com.intellij.openapi.actionSystem.ActionManager
 import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.actionSystem.RightAlignedToolbarAction
+import com.intellij.openapi.actionSystem.Separator
 import com.intellij.openapi.vcs.ProjectLevelVcsManager
 import com.intellij.openapi.vcs.VcsDirectoryMapping
 import com.intellij.openapi.vfs.LocalFileSystem
@@ -119,7 +120,7 @@ class ReviewSessionServiceTest : HeavyPlatformTestCase() {
         val actions = ReviewSessionService.getInstance(project).diffActions
         val manager = ActionManager.getInstance()
 
-        val navigation = actions.filterNot { it is RightAlignedToolbarAction }
+        val navigation = actions.filterNot { it is RightAlignedToolbarAction || it is Separator }
         val sessionControls = actions.filterIsInstance<RightAlignedToolbarAction>()
 
         assertEquals(
@@ -140,6 +141,14 @@ class ReviewSessionServiceTest : HeavyPlatformTestCase() {
                 DiffResetAllAction::class.java,
             ),
             sessionControls.map { it.javaClass },
+        )
+        // The marker interface no longer flush-aligns anything in this toolbar's layout (see
+        // ReviewSessionService.diffActions); this separator is the entire visual grouping mechanism
+        // now, so it earns its own pinned assertion rather than riding along inside the partition.
+        assertEquals(
+            "a separator must sit between the navigation group and the session controls",
+            navigation.size,
+            actions.indexOfFirst { it is Separator },
         )
     }
 

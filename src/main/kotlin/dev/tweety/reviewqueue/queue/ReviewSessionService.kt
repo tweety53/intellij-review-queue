@@ -3,6 +3,7 @@ package dev.tweety.reviewqueue.queue
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.actionSystem.ActionManager
 import com.intellij.openapi.actionSystem.AnAction
+import com.intellij.openapi.actionSystem.Separator
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
 import com.intellij.openapi.diagnostic.thisLogger
@@ -38,8 +39,17 @@ class ReviewSessionService(private val project: Project) : Disposable {
     private var session: ReviewSession? = null
 
     /**
-     * The diff viewer's toolbar, in two groups: per-file navigation on the left, session and queue
-     * controls right-aligned via `RightAlignedToolbarAction`.
+     * The diff viewer's toolbar, in two groups: per-file navigation on the left, then a separator,
+     * then the session and queue controls.
+     *
+     * The `RightAlignedToolbarAction` marker is still applied to the four session controls, but it
+     * does not push them to the toolbar's right edge here: `DiffHeaderToolbarUtil.createLayoutPanel`
+     * lays this toolbar out with `align(AlignX.LEFT).resizableColumn()`, which anchors the whole
+     * component at its preferred width on the left, so there is no right edge to align against
+     * inside it. The marker is kept anyway — it is harmless, documents the intended grouping, and
+     * would take effect unchanged if the surrounding layout ever gave the toolbar room to flush
+     * against. Until then, the `Separator` below is what actually draws the boundary between the
+     * two groups.
      *
      * The navigation actions are resolved by id, because that is what makes the button tooltip
      * carry the keyboard shortcut, and because Start Review is reachable from Find Action without
@@ -58,6 +68,7 @@ class ReviewSessionService(private val project: Project) : Disposable {
             manager.getAction("ReviewQueue.MarkReviewed"),
             manager.getAction("ReviewQueue.ToggleReviewed"),
         ) + listOf(
+            Separator.getInstance(),
             DiffStartReviewAction(),
             DiffEndReviewAction(),
             DiffRefreshQueueAction(),
