@@ -25,11 +25,13 @@ class ReviewSessionServiceTest : HeavyPlatformTestCase() {
 
     fun testStartIsInactiveWhenTheQueueIsEmpty() {
         val service = ReviewSessionService.getInstance(project)
-        service.presenter = FakePresenter()
+        val presenter = FakePresenter()
+        service.presenter = presenter
 
         service.start()
 
         assertFalse("an empty queue must not start a session", service.isActive)
+        assertTrue("an empty queue must not open any diff", presenter.shown.isEmpty())
     }
 
     fun testEndClosesThePresenterAndDeactivates() {
@@ -41,5 +43,6 @@ class ReviewSessionServiceTest : HeavyPlatformTestCase() {
 
         assertFalse(service.isActive)
         assertNull(service.currentKey())
+        assertEquals("end() must close the presenter's tab", 1, presenter.closed)
     }
 }
