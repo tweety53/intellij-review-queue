@@ -315,9 +315,10 @@ happen in the diff viewer once a review is running. This section checks that flo
 
 5. **The Mark Reviewed shortcut marks and advances in the review diff.**
    - During a review, place focus in the diff viewer. Test **each** bound chord in turn:
-     Alt+Shift+Z, Alt+Shift+Space, Alt+Shift+Enter, and Cmd+Shift+Z (Ctrl+Shift+Z on Windows/Linux).
+     Alt+Shift+Z, Alt+Shift+Space, Alt+Shift+Enter, Cmd+Shift+Z (Ctrl+Shift+Z on Windows/Linux),
+     and on macOS also Cmd+Option+Shift+Space and Cmd+Option+Shift+Enter.
      **Expected:** every one of them marks the file reviewed and advances, same as clicking Mark
-     Reviewed. Four are bound deliberately; a chord that silently does nothing is the bug.
+     Reviewed. All are bound deliberately; a chord that silently does nothing is the bug.
    - Now the case that matters: **leave the review running.** Do not click End Review. With the
      session still active, open a normal source file in another editor tab (Cmd+Shift+N / double
      click a file in the Recent Files popup — the Project tool window is hidden), click into that
@@ -496,6 +497,15 @@ the code — only from having done it in the IDE):
       must still work. On macOS confirm Ctrl+Shift+Z is not bound to Mark Reviewed.
       If a chord does nothing while the toolbar button works, follow the diagnosis note in
       section 5 — that chord is being eaten below the IDE, not by the plugin.
+- [ ] 23a. Cmd+Option+Shift+Left / Right step between files without changing any mark, and each is
+      disabled at its end of the pass. **Next File at the last file must do nothing** — it must not
+      end the pass the way marking the last file does.
+- [ ] 23b. Cmd+Option+Shift+Up / Down move between changed regions *within* the file on screen, and
+      match what the diff viewer's own Previous/Next Difference buttons do
+- [ ] 23c. Shift+F7 and F7 still work unchanged in the review diff, and in ordinary diffs outside a
+      review pass — the plugin adds a second way in, it must not take the platform's away
+- [ ] 23d. All four arrow chords do nothing in a normal editor while a pass is still running
+- [ ] 23e. Next File appears on the diff toolbar beside Previous File
 - [ ] 20f. Start Review after a fix round walks only the changed file(s)
 - [ ] 20g. Toggle Reviewed enables (re-test: previously looked permanently disabled)
 - [ ] 20h. Tab title tracks progress forward through at least three consecutive marks

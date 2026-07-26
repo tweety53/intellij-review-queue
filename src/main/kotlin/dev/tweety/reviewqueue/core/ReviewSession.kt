@@ -23,6 +23,14 @@ data class ReviewSession(val keys: List<ReviewKey>, val index: Int) {
 
     val total: Int get() = keys.size
 
+    /**
+     * True when the pass is sitting on its last file, where Next File has nothing to do.
+     *
+     * Distinct from `advance() == null`, which reads as "the pass is over": marking the last file
+     * ends the pass, but moving forward off it must not.
+     */
+    val isAtLast: Boolean get() = index >= keys.size - 1
+
     /** The next file, or null when the pass is finished. */
     fun advance(): ReviewSession? =
         if (index + 1 >= keys.size) null else copy(index = index + 1)

@@ -128,6 +128,7 @@ class ReviewSessionServiceTest : HeavyPlatformTestCase() {
             listOf(
                 manager.getAction("ReviewQueue.ShowFileList"),
                 manager.getAction("ReviewQueue.PreviousFile"),
+                manager.getAction("ReviewQueue.NextFile"),
                 manager.getAction("ReviewQueue.MarkReviewed"),
                 manager.getAction("ReviewQueue.ToggleReviewed"),
             ),
@@ -237,6 +238,61 @@ class ReviewSessionServiceTest : HeavyPlatformTestCase() {
         )
         assertFalse("the pass must be closed", service.isActive)
         assertNull("no file is current", service.currentKey())
+    }
+
+    /** The counterpart to Previous File: forward one file, marks untouched. */
+    fun testNextFileAdvancesWithoutMarkingAnything() {
+        val queue = stagedQueueOfTwoFiles()
+        val items = queue.snapshot().items
+        val service = ReviewSessionService.getInstance(project)
+        val presenter = FakePresenter()
+        service.presenter = presenter
+
+        service.start()
+        assertEquals(items[0].key, service.currentKey())
+
+        service.nextFile()
+
+        assertEquals(items[1].key, service.currentKey())
+        assertFalse("Next File must not mark the file it leaves", queue.isReviewed(items[0]))
+        assertFalse(queue.isReviewed(items[1]))
+        assertEquals(listOf(items[0].key, items[1].key), presenter.shown)
+    }
+
+    /**
+     * Next File at the last file must not end the pass. `markCurrent` ends it there deliberately —
+     * the pass is finished once the last file is marked — but a plain forward move has nothing to do
+     * and must leave the reviewer where they are.
+     */
+    fun testNextFileAtTheLastFileIsANoOpAndKeepsThePassRunning() {
+        val queue = stagedQueueOfTwoFiles()
+        val keys = queue.snapshot().items.map { it.key }
+        val service = ReviewSessionService.getInstance(project)
+        val presenter = FakePresenter()
+        service.presenter = presenter
+
+        service.start()
+        service.nextFile()
+        assertEquals(keys[1], service.currentKey())
+        assertTrue(service.isAtLastFile)
+
+        service.nextFile()
+
+        assertTrue("Next File must never end the pass", service.isActive)
+        assertEquals(keys[1], service.currentKey())
+        assertEquals("a no-op must not re-show the file", 2, presenter.shown.size)
+        assertEquals(0, presenter.closed)
+    }
+
+    fun testIsAtLastFileTracksTheCursor() {
+        val queue = stagedQueueOfTwoFiles()
+        val service = ReviewSessionService.getInstance(project)
+        service.presenter = FakePresenter()
+
+        service.start()
+        assertFalse("two files: the first is not the last", service.isAtLastFile)
+        service.nextFile()
+        assertTrue(service.isAtLastFile)
     }
 
     private fun git(dir: File, vararg args: String) {

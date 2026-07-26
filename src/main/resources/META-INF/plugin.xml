@@ -48,10 +48,35 @@
                 class="dev.tweety.reviewqueue.actions.ShowFileListAction"
                 text="Show File List"
                 description="List every file in the review scope with its reviewed state"/>
+        <!--
+          The Cmd+Option+Shift cluster below is macOS-only on purpose. Cmd is a Mac key, and the
+          Windows equivalent (Win+Alt+Shift+arrow) collides with OS window snapping. On other
+          platforms these actions ship shortcutless and are reachable from the diff toolbar.
+        -->
         <action id="ReviewQueue.PreviousFile"
                 class="dev.tweety.reviewqueue.actions.PreviousFileAction"
                 text="Previous File"
-                description="Go back one file without changing its reviewed mark"/>
+                description="Go back one file without changing its reviewed mark">
+            <keyboard-shortcut keymap="Mac OS X 10.5+" first-keystroke="alt meta shift LEFT"/>
+        </action>
+        <action id="ReviewQueue.NextFile"
+                class="dev.tweety.reviewqueue.actions.NextFileAction"
+                text="Next File"
+                description="Go forward one file without changing its reviewed mark">
+            <keyboard-shortcut keymap="Mac OS X 10.5+" first-keystroke="alt meta shift RIGHT"/>
+        </action>
+        <action id="ReviewQueue.PreviousChange"
+                class="dev.tweety.reviewqueue.actions.PreviousChangeAction"
+                text="Previous Change"
+                description="Move to the previous changed region in the file on screen">
+            <keyboard-shortcut keymap="Mac OS X 10.5+" first-keystroke="alt meta shift UP"/>
+        </action>
+        <action id="ReviewQueue.NextChange"
+                class="dev.tweety.reviewqueue.actions.NextChangeAction"
+                text="Next Change"
+                description="Move to the next changed region in the file on screen">
+            <keyboard-shortcut keymap="Mac OS X 10.5+" first-keystroke="alt meta shift DOWN"/>
+        </action>
         <action id="ReviewQueue.MarkReviewed"
                 class="dev.tweety.reviewqueue.actions.MarkReviewedAction"
                 text="Mark Reviewed"
@@ -81,6 +106,9 @@
             -->
             <keyboard-shortcut keymap="Mac OS X 10.5+" first-keystroke="meta shift Z"/>
             <keyboard-shortcut keymap="Mac OS X 10.5+" first-keystroke="control shift Z" remove="true"/>
+            <!-- macOS-only, matching the Cmd+Option+Shift navigation cluster. -->
+            <keyboard-shortcut keymap="Mac OS X 10.5+" first-keystroke="alt meta shift SPACE"/>
+            <keyboard-shortcut keymap="Mac OS X 10.5+" first-keystroke="alt meta shift ENTER"/>
         </action>
         <action id="ReviewQueue.ToggleReviewed"
                 class="dev.tweety.reviewqueue.actions.ToggleReviewedAction"

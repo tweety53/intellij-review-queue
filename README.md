@@ -27,9 +27,15 @@ The diff viewer's own toolbar carries two groups. On the left, the actions for t
 - **Show File List** — every file in the scope with its reviewed state, without leaving the pass.
   Picking a file in the pass jumps the diff to it; picking one that was already reviewed when the
   pass started opens it as a separate browsing diff and leaves the pass alone.
-- **Previous File** — steps back to the file shown before this one, without changing any mark. Use
-  it together with **Toggle Reviewed** to fix a mis-mark: step back, toggle the wrong mark off, then
-  Mark Reviewed to continue from there.
+- **Previous File** / **Next File** — step between files without changing any mark. Use Previous File
+  together with **Toggle Reviewed** to fix a mis-mark: step back, toggle the wrong mark off, then
+  Mark Reviewed to continue from there. Next File is for reading ahead, or for coming back forward
+  afterwards without recording a judgement on the file you leave. Each is disabled at its end of the
+  pass — Next File at the last file does nothing rather than finishing the pass, which is what
+  marking the last file is for.
+- **Previous Change** / **Next Change** — move between the changed regions *within* the file on
+  screen. These forward to the diff viewer's own Previous/Next Difference, so <kbd>Shift</kbd>+<kbd>F7</kbd>
+  and <kbd>F7</kbd> keep working as they always did; the plugin only adds a second way in.
 - **Mark Reviewed** — marks the file on screen reviewed and opens the next unreviewed one. Advancing
   **replaces** the diff tab rather than opening a new one, so there is only ever one review tab.
 
@@ -41,12 +47,28 @@ The diff viewer's own toolbar carries two groups. On the left, the actions for t
   | | <kbd>⌘</kbd><kbd>⇧</kbd><kbd>Z</kbd> | <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Z</kbd> |
   | | <kbd>⌥</kbd><kbd>⇧</kbd><kbd>Space</kbd> | <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>Space</kbd> |
   | | <kbd>⌥</kbd><kbd>⇧</kbd><kbd>Enter</kbd> | <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>Enter</kbd> |
+  | | <kbd>⌘</kbd><kbd>⌥</kbd><kbd>⇧</kbd><kbd>Space</kbd> | — |
+  | | <kbd>⌘</kbd><kbd>⌥</kbd><kbd>⇧</kbd><kbd>Enter</kbd> | — |
 
   Two of these are deliberately shared with bundled actions: **Ctrl+Shift+Z is Redo** (Windows and
   Linux only — macOS gets Cmd+Shift+Z instead and drops the Ctrl form), and **Alt+Shift+Enter is
   Split Chooser** and a Database/Grid binding. That is safe here because Mark Reviewed is enabled only
   inside the review diff viewer, whose editors are read-only, so the bundled actions are disabled
   exactly where this one is live. If an ambiguity popup ever appears, these are the two to suspect.
+
+  Navigation has its own macOS cluster, <kbd>⌘</kbd><kbd>⌥</kbd><kbd>⇧</kbd> plus an arrow — left and
+  right move **between files**, up and down move **between changes within** the current file:
+
+  | | |
+  | --- | --- |
+  | <kbd>⌘</kbd><kbd>⌥</kbd><kbd>⇧</kbd><kbd>←</kbd> | Previous File |
+  | <kbd>⌘</kbd><kbd>⌥</kbd><kbd>⇧</kbd><kbd>→</kbd> | Next File |
+  | <kbd>⌘</kbd><kbd>⌥</kbd><kbd>⇧</kbd><kbd>↑</kbd> | Previous Change |
+  | <kbd>⌘</kbd><kbd>⌥</kbd><kbd>⇧</kbd><kbd>↓</kbd> | Next Change |
+
+  That cluster is macOS-only on purpose: Cmd is a Mac key, and the Windows analogue
+  Win+Alt+Shift+arrow is OS window snapping. On Windows and Linux these four are reachable from the
+  diff toolbar, or bind your own chords in Settings → Keymap.
 
   **If you rebind this, avoid the space bar except as Alt+Shift+Space.** Two earlier attempts failed:
   <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Space</kbd> is Smart Type Completion in the bundled keymaps,

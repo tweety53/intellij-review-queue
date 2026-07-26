@@ -73,15 +73,33 @@ class MarkReviewedShortcutTest {
     }
 
     /**
-     * `ctrl shift SPACE` is SmartTypeCompletion in both bundled keymaps, and the macOS Cmd+Space
-     * family is consumed by input-source switching before the IDE sees the key. `alt shift SPACE` is
-     * neither: it is free in both bundled keymaps and in every bundled plugin, and was confirmed
-     * working by hand.
+     * Two space chords are bound, and both were confirmed working by hand. The two that are banned
+     * are banned for different reasons, which is why this test names them individually rather than
+     * rejecting the space bar wholesale:
+     *
+     * - `control shift SPACE` is SmartTypeCompletion in both bundled keymaps.
+     * - `meta shift SPACE` — Cmd+Shift+Space with no other modifier — never reaches the IDE on macOS
+     *   once a second input source is installed; the OS claims it for input-source switching.
+     *
+     * `alt meta shift SPACE` adds Option and is not claimed by the OS, which is what makes it usable
+     * where the bare Cmd form is not.
      */
     @Test
-    fun `the only space chord is the one verified to survive`() {
-        val spaceChords = chords(declarations).filter { it.contains("SPACE") }
-        assertEquals(listOf("alt shift SPACE"), spaceChords)
+    fun `the space chords are exactly the two verified to survive`() {
+        assertEquals(
+            setOf("alt shift SPACE", "alt meta shift SPACE"),
+            chords(declarations).filter { it.contains("SPACE") }.toSet(),
+        )
+    }
+
+    @Test
+    fun `neither banned space chord is bound`() {
+        val all = chords(declarations)
+        assertFalse("ctrl shift SPACE is SmartTypeCompletion", all.contains("control shift SPACE"))
+        assertFalse(
+            "bare meta shift SPACE is eaten by macOS input-source switching",
+            all.contains("meta shift SPACE"),
+        )
     }
 
     @Test
