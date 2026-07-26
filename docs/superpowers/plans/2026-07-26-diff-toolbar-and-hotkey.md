@@ -615,7 +615,7 @@ moves within `keys` and refuses anything outside it, so a pick can never grow th
 - Consumes: `ReviewSessionService.diffActions` exists as `internal` (Task 2). Not otherwise coupled.
 - Produces, both used by Task 5:
   - `ReviewSession.jumpTo(key: ReviewKey): ReviewSession?` — null when `key` is not in `keys`
-  - `ReviewSessionService.jumpTo(key: ReviewKey): Boolean` — false when there is no session or the key is not in it, so the caller can fall back to a browsing diff
+  - `ReviewSessionService.jumpTo(key: ReviewKey): Boolean` — true only when a file is now on screen; false when there is no session, the key is not in the pass, or the jump ended the pass, so the caller can fall back to a browsing diff
 
 - [ ] **Step 1: Write the failing pure tests**
 
@@ -744,8 +744,11 @@ In `src/main/kotlin/dev/tweety/reviewqueue/queue/ReviewSessionService.kt`, after
 
 ```kotlin
     /**
-     * Moves the pass to [key] and shows it. Returns false when there is no session or [key] is not
-     * part of it, so the caller can open it as a browsing diff instead.
+     * Moves the pass to [key] and shows it. Returns true only when a file is now on screen, so a
+     * false lets the caller open [key] as a browsing diff instead.
+     *
+     * False covers three cases: no session, [key] is not part of this pass, and the jump ended the
+     * pass because nothing at or after [key] could still be shown.
      *
      * Goes through [showCurrent] like every other move, so a jump to a file that has since left the
      * queue settles forward onto the next live one rather than failing — the same behaviour marking
@@ -755,9 +758,15 @@ In `src/main/kotlin/dev/tweety/reviewqueue/queue/ReviewSessionService.kt`, after
         val moved = session?.jumpTo(key) ?: return false
         session = moved
         showCurrent()
-        return true
+        // showCurrent() ends the pass when nothing at or after the target is still showable.
+        return session != null
     }
 ```
+
+> **Amended after Task 3's review.** This step originally returned `true` unconditionally.
+> `showCurrent()` calls `end()` when its skip loop exhausts, so that `true` could mean "the pass
+> just ended and nothing is on screen" — the exact case Task 5's caller uses the boolean to catch.
+> Ruled by the human partner: the contract is what changes, not `showCurrent()`.
 
 - [ ] **Step 8: Run the full suite to verify it passes**
 

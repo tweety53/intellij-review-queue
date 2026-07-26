@@ -199,6 +199,29 @@ class ReviewSessionServiceTest : HeavyPlatformTestCase() {
         assertFalse(service.jumpTo(ReviewKey("/repo", "a.txt")))
     }
 
+    fun testJumpToReturnsFalseWhenTheJumpEndsThePass() {
+        val queue = stagedQueueOfTwoFiles()
+        val keys = queue.snapshot().items.map { it.key }
+        val service = ReviewSessionService.getInstance(project)
+        service.presenter = FakePresenter()
+
+        service.start()
+        assertTrue("start must succeed", service.isActive)
+        assertEquals(keys[0], service.currentKey())
+
+        // Swap to a presenter that rejects everything.
+        service.presenter = object : FakePresenter() {
+            override fun canShow(key: ReviewKey) = false
+        }
+
+        assertFalse(
+            "a jump that ends the pass must return false",
+            service.jumpTo(keys[1]),
+        )
+        assertFalse("the pass must be closed", service.isActive)
+        assertNull("no file is current", service.currentKey())
+    }
+
     private fun git(dir: File, vararg args: String) {
         val process = ProcessBuilder(listOf("git", *args))
             .directory(dir)

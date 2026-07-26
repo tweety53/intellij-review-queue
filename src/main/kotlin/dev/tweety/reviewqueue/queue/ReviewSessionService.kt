@@ -131,8 +131,10 @@ class ReviewSessionService(private val project: Project) : Disposable {
     }
 
     /**
-     * Moves the pass to [key] and shows it. Returns false when there is no session or [key] is not
-     * part of it, so the caller can open it as a browsing diff instead.
+     * Moves the pass to [key] and shows it. Returns false when there is no session, [key] is not
+     * part of it, or the jump ends the pass because nothing at or after the target is still
+     * showable, so the caller can open it as a browsing diff instead. In every `true` case, a file
+     * is on screen.
      *
      * Goes through [showCurrent] like every other move, so a jump to a file that has since left the
      * queue settles forward onto the next live one rather than failing — the same behaviour marking
@@ -142,7 +144,8 @@ class ReviewSessionService(private val project: Project) : Disposable {
         val moved = session?.jumpTo(key) ?: return false
         session = moved
         showCurrent()
-        return true
+        // showCurrent() ends the pass when nothing at or after the target is still showable.
+        return session != null
     }
 
     /** Ends the pass, restoring the layout. Every mark made so far is kept. */
