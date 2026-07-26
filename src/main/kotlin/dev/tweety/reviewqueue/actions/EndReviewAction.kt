@@ -10,7 +10,7 @@ import dev.tweety.reviewqueue.queue.ReviewSessionService
 /** Leaves the guided pass and restores the layout. Marks already made are kept. */
 open class EndReviewAction : AnAction(
     "End Review",
-    "Leave the guided review and restore the tool windows",
+    "Leave the guided review and restore the Project panel",
     AllIcons.Actions.Exit,
 ) {
 

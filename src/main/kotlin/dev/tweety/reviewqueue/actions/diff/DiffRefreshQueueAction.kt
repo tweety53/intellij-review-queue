@@ -9,13 +9,12 @@ import dev.tweety.reviewqueue.actions.confirmed
 /**
  * Refresh on the diff toolbar, grouped at the end of the toolbar behind a separator, and confirming.
  *
- * Confirmed here but not in the tool window, and deliberately so. `ReviewSessionService` does not
- * subscribe to the queue and never re-settles on its own, so a refresh does not move the cursor out
- * from under the reader directly. What it does do is let the session's fixed key list go stale
- * against the freshly rebuilt queue — a discrepancy that only surfaces later, at `markCurrent()`'s
- * "left the queue" branch, far from the click that caused it. That disruption, one click away in the
- * middle of a pass, is enough to justify asking first. In the tool window there is no pass to
- * disrupt, so it stays a cheap re-read of a list.
+ * Since KAN-5, Refresh means a synchronous resolve on both surfaces — `RefreshQueueAction` is this
+ * class's superclass and `actionPerformed` delegates to it, so the two cannot diverge without
+ * duplicating the action. The confirmation is worth more than ever: the effect is now immediate
+ * rather than surfacing later at `markCurrent()`'s "left the queue" branch, and it lets the session's
+ * fixed key list go stale against a freshly rebuilt queue while the reviewer is mid-file. Cancelling
+ * the progress is a supported way out.
  *
  * See `DiffStartReviewAction`'s KDoc for why `RightAlignedToolbarAction` is implemented here without
  * actually right-aligning anything.

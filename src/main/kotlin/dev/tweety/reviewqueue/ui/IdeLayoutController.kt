@@ -32,6 +32,16 @@ class IdeLayoutController(private val project: Project) :
 
     override fun loadState(state: State) {
         myState = state
+        // Drop ids this plugin no longer manages. Such an id is unrestorable by construction —
+        // `getToolWindow` cannot resolve an unregistered window — so `restore()` would keep it on
+        // the unresolved record forever, and a permanently non-empty record latches
+        // `hideForReview()`'s leftover branch and silently stops hiding anything ever again.
+        //
+        // Deliberately a named legacy list rather than `MANAGED_IDS`. Keying on MANAGED_IDS would
+        // also empty any record a test seeded through this method, and the general
+        // "keep ids that are managed but not yet registered" contract that `restore()` implements
+        // has to keep working. These are two different rules for two different causes.
+        myState.hiddenByReview.removeAll(LEGACY_IDS)
     }
 
     /** Hides the managed windows that are currently visible, remembering which they were. */
@@ -74,7 +84,10 @@ class IdeLayoutController(private val project: Project) :
     }
 
     companion object {
-        private val MANAGED_IDS = listOf("Project", "Review Queue")
+        private val MANAGED_IDS = listOf("Project")
+
+        /** Ids this plugin used to manage. `Review Queue` was its tool window until KAN-5. */
+        private val LEGACY_IDS = setOf("Review Queue")
 
         fun getInstance(project: Project): IdeLayoutController = project.service()
     }

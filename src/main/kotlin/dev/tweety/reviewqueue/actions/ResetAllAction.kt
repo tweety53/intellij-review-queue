@@ -5,6 +5,7 @@ import com.intellij.openapi.actionSystem.ActionUpdateThread
 import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.actionSystem.CommonDataKeys
+import dev.tweety.reviewqueue.git.GitRoots
 import dev.tweety.reviewqueue.queue.ReviewQueueService
 
 /** Clears every stored reviewed mark for this project, after confirmation. */
@@ -13,6 +14,12 @@ import dev.tweety.reviewqueue.queue.ReviewQueueService
 open class ResetAllAction : AnAction("Reset All", "Clear every reviewed mark in this project", AllIcons.General.Reset) {
 
     override fun getActionUpdateThread() = ActionUpdateThread.EDT
+
+    /** Gated on a git root, for the same reason as [RefreshQueueAction]: it is now a menu entry. */
+    override fun update(e: AnActionEvent) {
+        val project = e.getData(CommonDataKeys.PROJECT)
+        e.presentation.isEnabled = project != null && GitRoots.exist(project)
+    }
 
     override fun actionPerformed(e: AnActionEvent) {
         val project = e.getData(CommonDataKeys.PROJECT) ?: return

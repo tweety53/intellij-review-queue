@@ -15,12 +15,65 @@ Download or build the plugin zip, then Settings → Plugins → gear → Install
 
 ## Use
 
-Open the **Review Queue** tool window on the right and pick a **Scope**: Staged (the default),
-Branch vs Base, or an explicit Commit Range. The Commit Range dialog rejects refs containing a
-space or `;`.
+Everything the plugin offers outside a review pass lives under **Tools → Review Queue**: a **Scope**
+submenu, **Start Review**, **Show File List**, then a separator, **Refresh** and **Reset All**. There
+is no tool window — the right-hand panel this plugin used to ship is gone, and nothing runs at
+project open any more: the queue is resolved when a command asks for it, under a progress dialog you
+can cancel.
 
-Press **Start Review** to begin a guided pass over everything still unreviewed in that scope. This
-hides the Project and Review Queue tool windows and opens the first file as a diff.
+Every entry in the group is enabled whenever the project has at least one git root, and disabled in a
+project with none. Enablement deliberately does not look at the queue's contents, because nothing has
+resolved the queue until you ask it to.
+
+**Scope** is a nested submenu: **Staged** (the default), **Branch vs Base…**, **Commit Range…**.
+Branch vs Base asks for a base ref and uses the tracked branch when you leave it empty. Commit Range
+asks for a From ref, then a To ref.
+
+Every ref is rejected if it contains whitespace or a shell metacharacter (`;`, `&`, `|`, a backtick,
+`$`), **or if it begins with `-`**. That last rule is the one that matters: git4idea resolves a ref with
+`git rev-list --timestamp --max-count=1 <ref>` and no `--` separator, so a ref starting with a dash is
+read as an option — and `--output=<file>` truncates that file before git rejects the missing commit.
+A ref is checked wherever it comes from, including refs this plugin never asked you for: the resolved
+base and **the current branch name**. Branch names may legally begin with `-`, and `git clone` checks
+out whatever the remote's HEAD points at, so cloning a hostile repository and pressing Start Review was
+otherwise enough to zero `.git/index`. This plugin only ever reads a repository, and that rule is part
+of how it keeps that promise.
+
+**The scope can be changed during a pass**, which it could not before. It asks first — *"Switch the
+review scope to …? The current pass restarts and every mark made so far is kept."* — and on Yes it
+resolves the new scope and restarts the pass in place, keeping every mark. Cancelling the ref prompt
+or the progress dialog leaves the pass exactly where it was. Outside a pass, choosing a scope records
+it and re-reads it in the background; the next Start Review or Show File List resolves it for real,
+which is the point at which you see a progress dialog.
+
+**Start Review** begins a guided pass over everything still unreviewed in the current scope. It hides
+the Project tool window and opens the first file as a diff.
+
+On **macOS** it is <kbd>⌘</kbd><kbd>⌥</kbd><kbd>⇧</kbd><kbd>R</kbd>, joining the plugin's
+<kbd>⌘</kbd><kbd>⌥</kbd><kbd>⇧</kbd> cluster. **On Windows and Linux it ships with no shortcut at
+all.** That cluster is macOS-only because `meta` is the Windows key in the cross-platform keymap, so
+there the way in is the Tools menu or Find Action — or bind your own chord in Settings → Keymap.
+
+**Show File List** is now the only way to browse the queue, in a pass or out of one: the old panel's
+queue tree is gone with the panel. It lists every file in the current scope with its reviewed state,
+and its title reads `N / M reviewed  •  <scope>` — that title is what replaced the panel's progress
+label. Picking a file that is part of a running pass jumps the diff to it; picking one that was
+already reviewed when the pass started opens it as a separate browsing diff and leaves the pass
+alone. Outside a pass, every pick is a browsing diff.
+
+**Refresh** re-reads the scope **immediately**, under a progress dialog, from the Tools menu and from
+the diff toolbar alike — there is no list left for a background refresh to update, so the progress
+dialog is itself the sign that anything happened. **Reset All** clears every reviewed mark in the
+project, after confirming.
+
+Failed repositories and an empty scope are reported as **notifications** now, not as labels in a
+panel. A root that cannot be read balloons with its path and git's own message; an unchanged failure
+on the next rebuild stays quiet, and a root that recovers and breaks again is announced again. A
+resolve that leaves nothing to do says *which* nothing it found rather than appearing to do nothing:
+*"Nothing unreviewed in Staged"* only when that is what happened, and otherwise that the scope could
+not be read, that the project has no git repository, or that no unreviewed file could be displayed.
+Switching scope mid-pass into a scope with nothing unreviewed says so as well, and does not claim you
+finished a pass you never ran.
 
 The diff viewer's own toolbar carries two groups. On the left, the actions for the file on screen:
 
@@ -77,24 +130,22 @@ The diff viewer's own toolbar carries two groups. On the left, the actions for t
 - **Toggle Reviewed** — adds or removes the reviewed mark on the file currently on screen without
   moving to another file.
 
-A separator, then the session and queue controls on the same toolbar — **Start Review**, **End
-Review**, **Refresh** and **Reset All**, the same four as in the tool window. Refresh and Reset All
-are how you reach those two without ending the pass, since a pass hides the tool window. Start
-Review appears here too, for symmetry with the tool-window group, but shows up greyed out during a
-pass — the same as the tool window's own copy — because a pass is already running. Each one **asks
-before acting**: they sit directly above the code you are reading, where an accidental press is
-expensive. The tool-window copies are unchanged — only Reset All confirms there.
+A separator, then the session and queue controls on the same toolbar, led by a **Scope** combo box
+that names the current scope and opens the same three choices as the menu — **Start Review**, **End
+Review**, **Refresh** and **Reset All** follow it. This is how you reach any of them without ending
+the pass. Start Review appears here too, for uniformity, but shows up greyed out during a pass
+because a pass is already running. Each one **asks before acting**: they sit directly above the code
+you are reading, where an accidental press is expensive. In the Tools menu only Reset All confirms.
 
-**End Review** leaves the guided pass early. Every mark made so far is kept, and both tool windows
-are restored. Closing the review diff tab by hand does the same thing.
+**End Review** leaves the guided pass early. Every mark made so far is kept and the Project tool
+window is restored. Closing the review diff tab by hand does the same thing. End Review is not in the
+Tools menu — it belongs to a running pass, so it lives on the diff toolbar and in Find Action.
 
-The diff tab's title tracks progress as `Review N/M - filename`. Marking the last file restores
-both tool windows automatically and fires the completion balloon.
+The diff tab's title tracks progress as `Review N/M - filename`. Marking the last file restores the
+Project tool window automatically and fires the completion balloon.
 
-Outside a review session, the tool window itself still lists every file in the current scope with
-its reviewed state, and **Refresh** re-reads the scope. **Reset All** clears every reviewed mark in
-the project. Files are grouped by git root (repository), then sorted by path within each root,
-using the platform's own changes-tree grouping.
+Files are ordered by git root (repository), then by path within each root, so a queue spanning
+submodules stays grouped by the repository each file belongs to.
 
 Reviewed marks are content-addressed: editing a file drops its mark automatically, so a fix round
 returns exactly the rewritten file(s) to the queue, and starting a new review after a fix round
@@ -106,9 +157,9 @@ machines. They survive an IDE restart.
 
 - Rename detection is disabled: a staged rename appears as a delete of the old path plus an add of
   the new path, not a single rename entry.
-- When the scope is refreshed and the file that was selected drops out of the queue (e.g. it was
+- When the scope is refreshed and the file the cursor was on drops out of the queue (e.g. it was
   reviewed and content changed upstream), the cursor falls back to whichever item now occupies the
-  old position in the list — which may already be reviewed. This is intentional (it keeps the
+  old position in the queue — which may already be reviewed. This is intentional (it keeps the
   cursor from jumping unpredictably) but can feel surprising; see
   `docs/manual-verification.md` for the checklist item that asks a human to judge whether it feels
   right in practice.
@@ -127,24 +178,31 @@ IntelliJ IDEA Ultimate 2026.2 or newer (build 262+), with the bundled Git4Idea p
 
 ## Verification status
 
-- `./gradlew test` — 79 tests, all green.
-- `./gradlew verifyPlugin` — **Compatible** with IU-262.9437.22, zero compatibility problems.
-  It reports 4 deprecated-API and 6 experimental-API usages, all on `ToolWindowFactory`
-  (`isDoNotActivateOnStart`, `isApplicable`, `getIcon`, `getAnchor`, `manage`). These are Kotlin
-  compiler-generated bridge overrides for that interface's default methods, not calls this plugin
-  makes — `ReviewQueueToolWindowFactory` only implements `createToolWindowContent`. Every Kotlin
-  plugin implementing `ToolWindowFactory` reports the same usages; there is nothing to fix here.
+- `./gradlew test` — 194 tests, all green.
+- `./gradlew verifyPlugin` — **Compatible** with IU-262.9437.22, zero compatibility problems, and
+  **zero deprecated-API and zero experimental-API usages**.
+  Earlier releases reported 4 deprecated and 6 experimental usages, all Kotlin-generated bridge
+  overrides of `ToolWindowFactory`'s default methods. That class was deleted with the tool window, so
+  the count is now zero and there is nothing left to explain away.
 - `./gradlew runIde` was launched in a headless sandbox with no display attached (`screencapture`
   fails there with "could not create image from display"), so it could only confirm that the
-  plugin loads cleanly — `dev.tweety.reviewqueue` does not appear in the platform's "Problems
-  found loading plugins" block and nothing else in the log mentions the plugin. No UI interaction
+  plugin loads cleanly — the sandbox log records `Loaded custom plugins: Review Queue (0.4.0)`, and
+  `dev.tweety.reviewqueue` appears nowhere in the platform's "Problems found loading plugins" block.
+  (That block is non-empty, but names only bundled Ultimate plugins missing
+  `com.intellij.modules.ultimate` in the sandbox. One consequence worth knowing before the shortcut
+  check: if the Database plugin does not load there, `DatabaseView.ForceRefresh` is absent, so a clean
+  chord press proves less than it appears to — the `.gradle.kts` case is the informative one.)
+  No UI interaction
   was possible in that environment: whether the diff toolbar's two groups
-  (`DiffUserDataKeys.CONTEXT_ACTIONS` on the chain, see `EditorTabDiffPresenter`) actually render —
-  and every other guided-review interaction — remains **unverified by a human**. One part of that
-  question is already settled without a display, though: whether the right-hand group renders flush
-  right does not require a human to check, because reading the 2026.2 platform's toolbar-layout
+  (`DiffUserDataKeys.CONTEXT_ACTIONS` on the chain, see `EditorTabDiffPresenter`) actually render,
+  whether **Tools → Review Queue** renders as a named submenu, whether
+  <kbd>⌘</kbd><kbd>⌥</kbd><kbd>⇧</kbd><kbd>R</kbd> reaches Start Review or raises an action-chooser
+  popup, and every other guided-review interaction — all remain **unverified by a human**. One part
+  of that question is already settled without a display, though: whether the right-hand group renders
+  flush right does not require a human to check, because reading the 2026.2 platform's toolbar-layout
   bytecode is enough to show it cannot, regardless of what a screenshot would show. A `Separator`
-  ships instead, grouping the four controls rather than flushing them right — see the design doc's
+  ships instead, grouping the session controls rather than flushing them right — see the design doc's
   *Known risk* for the bytecode read. See
   `docs/manual-verification.md` for the checklist a human with a real display must run before
-  relying on this plugin — section 20 covers the guided review flow specifically.
+  relying on this plugin — section 20 covers the guided review flow, and section 24 the entry points
+  this release changed, including the Start Review shortcut, which must be tested twice.

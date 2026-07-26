@@ -1,18 +1,22 @@
 package dev.tweety.reviewqueue.actions
 
-import com.intellij.diff.tools.util.DiffDataKeys
 import com.intellij.icons.AllIcons
 import com.intellij.openapi.actionSystem.ActionUpdateThread
 import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.actionSystem.CommonDataKeys
+import dev.tweety.reviewqueue.git.GitRoots
+import dev.tweety.reviewqueue.notify.QueueNotices
 import dev.tweety.reviewqueue.queue.ReviewQueueService
 import dev.tweety.reviewqueue.queue.ReviewSessionService
 import dev.tweety.reviewqueue.ui.ReviewFileListPopup
 
 /**
- * Opens the file list from the diff toolbar: the whole change and its reviewed state, without
- * ending the pass to go and look at the tool window that the pass has hidden.
+ * The whole change and its reviewed state, as a popup.
+ *
+ * Since KAN-5 removed the tool window, this is the *only* way to browse the queue, so it no longer
+ * requires a running pass or a focused diff viewer — the old gates existed because the tool window's
+ * tree was the better way to browse outside a pass, and that tree no longer exists.
  */
 class ShowFileListAction : AnAction(
     "Show File List",
@@ -24,19 +28,21 @@ class ShowFileListAction : AnAction(
 
     override fun update(e: AnActionEvent) {
         val project = e.getData(CommonDataKeys.PROJECT)
-        // Diff-viewer only, and only during a pass: outside one the tool window's own tree is
-        // already on screen and is the better way to browse. Also requires a non-empty snapshot, so
-        // a button left enabled by a stale update is not the only thing standing between the user
-        // and a silent no-op — see the isEmpty guard in ReviewFileListPopup.show for the other half:
-        // that guard covers the queue emptying in the race between this update() and the click.
-        e.presentation.isEnabled = project != null &&
-            ReviewSessionService.getInstance(project).isActive &&
-            e.getData(DiffDataKeys.DIFF_CONTEXT) != null &&
-            ReviewQueueService.getInstance(project).snapshot().items.isNotEmpty()
+        e.presentation.isEnabled = project != null && GitRoots.exist(project)
     }
 
     override fun actionPerformed(e: AnActionEvent) {
         val project = e.getData(CommonDataKeys.PROJECT) ?: return
+        val queue = ReviewQueueService.getInstance(project)
+        // Inside a pass the session already holds a resolved queue and re-resolving would let the
+        // session's fixed key list go stale against a freshly rebuilt one. Outside a pass, nothing
+        // else has resolved anything.
+        if (!ReviewSessionService.getInstance(project).isActive && !queue.resolveNow()) return
+        val snapshot = queue.snapshot()
+        if (snapshot.items.isEmpty()) {
+            QueueNotices.emptyResult(project, snapshot)
+            return
+        }
         ReviewFileListPopup.show(project, e.dataContext)
     }
 }

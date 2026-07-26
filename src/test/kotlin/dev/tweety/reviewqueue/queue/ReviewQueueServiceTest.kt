@@ -70,8 +70,11 @@ class ReviewQueueServiceTest {
             RootResult("/p/sub", listOf(inner), null),
         )
         val assembled = QueueAssembler.assemble(results, listOf("/p", "/p/sub"))
-        assertEquals(ReviewKey("/p", "top.kt"), assembled.keysByChange[outer])
-        assertEquals(ReviewKey("/p/sub", "file.kt"), assembled.keysByChange[inner])
+        // Asserted through `changesByKey`, the one lookup the queue still publishes: the inner root's
+        // file must be reachable under the inner root's key, not under the enclosing one. Keying by a
+        // path prefix instead files both changes under `/p`, and nothing then resolves `/p/sub`.
+        assertSame(outer, assembled.changesByKey[ReviewKey("/p", "top.kt")])
+        assertSame(inner, assembled.changesByKey[ReviewKey("/p/sub", "file.kt")])
     }
 
     @Test
@@ -82,11 +85,10 @@ class ReviewQueueServiceTest {
 
         val assembled = QueueAssembler.assemble(results, listOf("/a"))
 
-        // One row in the tree, one entry in the queue, one entry in the lookup — the progress
-        // label and the tree cannot disagree.
+        // One entry in the queue and one in the lookup, so nothing can count a file that no
+        // lookup-driven gesture is able to reach — the file-list popup's `N / M` title reads `items`.
         assertEquals(listOf(ReviewKey("/a", "dup.kt")), keys(assembled))
         assertEquals(1, assembled.changesByKey.size)
         assertSame(first, assembled.changesByKey[ReviewKey("/a", "dup.kt")])
-        assertEquals(1, assembled.keysByChange.size)
     }
 }
