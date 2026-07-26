@@ -136,4 +136,90 @@ class GitReviewSourceIntegrationTest : HeavyPlatformTestCase() {
         val paths = results[0].changes.mapNotNull { it.afterRevision?.file?.name }.sorted()
         assertEquals(listOf("feature.txt"), paths)
     }
+
+    /**
+     * A branch name is untrusted input, and this asserts on the **file system**, not on an error string.
+     *
+     * Branch names may begin with `-` — `git check-ref-format 'refs/heads/--output=.git/index'` exits 0 —
+     * and `git clone` checks the remote's HEAD branch out for you. git4idea resolves the current branch
+     * with `git rev-list --timestamp --max-count=1 <ref>`, placing the ref *before* `endOptions()`, so
+     * git's parse-options reads it as an option and `--output=<file>` opens that file for writing before
+     * rejecting the missing commit argument. Cloning a hostile repository and pressing Start Review in
+     * Branch vs Base was therefore enough to zero `.git/index`, destroying the staged state, with the
+     * reviewer typing nothing at all. Reproduced end to end against real git: 137 bytes → 0.
+     *
+     * An earlier fix validated only the ref the *user* typed. `base` (which may come from the tracked
+     * branch) and `head` (a branch name straight from the repository) were left unchecked precisely
+     * because they are not user input — which is backwards, since the repository is the untrusted party.
+     *
+     * Asserting `error != null` alone would be **vacuous**: git fails either way, *after* truncating. The
+     * index size is the only assertion that distinguishes "rejected" from "executed, then reported".
+     */
+    fun testAHostileBranchNameCannotMakeGitTruncateAFileInTheRepository() {
+        git("reset", "--hard", "HEAD")
+        val safeBase = git("rev-parse", "--abbrev-ref", "HEAD").trim()
+        // `git checkout -b` refuses this name, but `update-ref` + `symbolic-ref` does not — and neither
+        // does `git clone`, which checks out whatever the remote's HEAD points at. That is the real
+        // delivery route: the reviewer never types or creates the branch.
+        git("update-ref", "refs/heads/--output=.git/index", "HEAD")
+        git("symbolic-ref", "HEAD", "refs/heads/--output=.git/index")
+        LocalFileSystem.getInstance().refreshAndFindFileByIoFile(repoDir)
+        VcsRepositoryManager.getInstance(project).waitForAsyncTaskCompletion()
+        val repository = GitRepositoryManager.getInstance(project).repositories.single()
+        ApplicationManager.getApplication().executeOnPooledThread { repository.update() }.get()
+        assertEquals(
+            "the fixture must actually be on the hostile branch, or this asserts nothing",
+            "--output=.git/index",
+            repository.currentBranch?.name,
+        )
+        val index = File(repoDir, ".git/index")
+        val sizeBefore = index.length()
+        assertTrue("the index must be non-empty before the resolve", sizeBefore > 0L)
+
+        // An explicit, resolvable base on purpose. With no base given, resolution falls back to
+        // `origin/HEAD`, which this fixture has no remote for — so the resolve dies on the base before
+        // `head` ever reaches `git rev-list`, and the index survives for a reason that has nothing to do
+        // with the guard. Supplying a valid base is what makes the hostile `head` actually reachable, and
+        // therefore what makes this test able to observe the write.
+        val results = GitReviewSource(project).resolve(ReviewScope.BranchVsBase(explicitBase = safeBase))
+
+        assertEquals(
+            "the repository index must be untouched — a review must never write to the repository",
+            sizeBefore,
+            index.length(),
+        )
+        val error = results.single().error
+        assertNotNull("the root must report why it could not be read", error)
+        assertTrue(
+            "the message must name the option hazard, not git's own failure: got \"$error\"",
+            error!!.contains("option"),
+        )
+    }
+
+    /**
+     * The boundary re-check exists so that a `ReviewScope` built by **any** caller is safe, not only one
+     * built by the input dialogs — the dialogs are one caller of a public data class.
+     *
+     * **Both** range refs are exercised. Asserting only `from` left the `to` guard deletable with the
+     * whole suite green, which is the same could-not-fail shape this branch has repeatedly caught: the
+     * validator was covered, the *call site* was not.
+     */
+    fun testBothCommitRangeRefsAreRejectedAtTheServiceBoundaryNotOnlyInTheDialog() {
+        val index = File(repoDir, ".git/index")
+        val sizeBefore = index.length()
+        val source = GitReviewSource(project)
+
+        listOf(
+            ReviewScope.CommitRange("--output=.git/index", "HEAD"),
+            ReviewScope.CommitRange("HEAD", "--output=.git/index"),
+        ).forEach { scope ->
+            val results = source.resolve(scope)
+
+            assertEquals("the index must be untouched for $scope", sizeBefore, index.length())
+            val error = results.single().error
+            assertNotNull("$scope must be rejected", error)
+            assertTrue("$scope: got \"$error\"", error!!.contains("option"))
+        }
+    }
+
 }

@@ -1,43 +1,14 @@
 package dev.tweety.reviewqueue.ui
 
-import com.intellij.openapi.project.Project
-import com.intellij.openapi.wm.ToolWindow
-import com.intellij.openapi.wm.ToolWindowManager
 import com.intellij.testFramework.HeavyPlatformTestCase
-import com.intellij.testFramework.replaceService
-import com.intellij.toolWindow.ToolWindowHeadlessManagerImpl
 
 class IdeLayoutControllerTest : HeavyPlatformTestCase() {
-
-    /**
-     * The platform's headless tool window hard-codes `isVisible = false` and no-ops `show`/`hide`,
-     * so asserting against it would only test the mock. This one actually tracks visibility, which
-     * is what lets these tests say whether a window was really reopened rather than merely dropped
-     * from the record.
-     */
-    private class RecordingToolWindow(project: Project, private var visible: Boolean) :
-        ToolWindowHeadlessManagerImpl.MockToolWindow(project) {
-        var shows = 0
-        var hides = 0
-        override fun isVisible() = visible
-        override fun show(runnable: Runnable?) { shows++; visible = true }
-        override fun hide(runnable: Runnable?) { hides++; visible = false }
-    }
-
-    private class RecordingToolWindowManager(private val project: Project) :
-        ToolWindowHeadlessManagerImpl(project) {
-        private val windows = mutableMapOf<String, RecordingToolWindow>()
-        fun register(id: String, visible: Boolean): RecordingToolWindow =
-            RecordingToolWindow(project, visible).also { windows[id] = it }
-        override fun getToolWindow(id: String?): ToolWindow? = windows[id]
-    }
 
     private lateinit var manager: RecordingToolWindowManager
 
     override fun setUp() {
         super.setUp()
-        manager = RecordingToolWindowManager(project)
-        project.replaceService(ToolWindowManager::class.java, manager, testRootDisposable)
+        manager = RecordingToolWindowManager.install(project, testRootDisposable)
     }
 
     private fun controllerWithRecord(vararg ids: String): IdeLayoutController {
@@ -49,26 +20,97 @@ class IdeLayoutControllerTest : HeavyPlatformTestCase() {
     }
 
     fun testLoadedStateIsReturnedByGetState() {
+        val controller = controllerWithRecord("Project", "SomeOtherWindow")
+
+        assertEquals(listOf("Project", "SomeOtherWindow"), controller.state.hiddenByReview)
+    }
+
+    /**
+     * A stale id from a version that still had the Review Queue tool window must be dropped as the
+     * state loads. It can never resolve now, so `restore()` would keep it on the `unresolved` record
+     * forever — and a permanently non-empty record latches `hideForReview()`'s "leftover means
+     * restore first" branch.
+     */
+    fun testLoadStateDropsAnIdThePluginNoLongerManages() {
         val controller = controllerWithRecord("Project", "Review Queue")
 
-        assertEquals(listOf("Project", "Review Queue"), controller.state.hiddenByReview)
+        assertEquals(
+            "the retired tool window id must not survive a state load",
+            listOf("Project"),
+            controller.state.hiddenByReview,
+        )
     }
 
     fun testHideRecordsAndHidesOnlyTheVisibleManagedWindows() {
         val projectWindow = manager.register("Project", visible = true)
-        val queueWindow = manager.register("Review Queue", visible = false)
+        val unmanaged = manager.register("SomeOtherWindow", visible = true)
         val controller = controllerWithRecord()
 
         controller.hideForReview()
 
         assertEquals(
-            "only the windows that were actually visible may be recorded, or restore reopens a " +
-                "window the user had closed",
+            "only managed windows that were actually visible may be recorded, or restore reopens a " +
+                "window the user had closed — or one the review never touched",
             listOf("Project"),
             controller.state.hiddenByReview,
         )
         assertFalse(projectWindow.isVisible)
-        assertEquals(0, queueWindow.hides)
+        assertEquals("a window this plugin does not manage must not be hidden", 0, unmanaged.hides)
+    }
+
+    /**
+     * A managed window the user had already closed must be left alone — spec scenario "A window the
+     * user had already closed is not reopened".
+     *
+     * This case existed before KAN-5 as the `visible = false` half of
+     * [testHideRecordsAndHidesOnlyTheVisibleManagedWindows], where `Review Queue` played the invisible
+     * managed window. Reducing `MANAGED_IDS` to one id left that rewrite with no managed-and-invisible
+     * window anywhere in the file, and the coverage went with it: weakening the visibility filter in
+     * `hideForReview` to `manager.getToolWindow(it) != null` passed the entire suite, while making the
+     * plugin hide a Project window the user had deliberately closed and reopen it at end of pass.
+     */
+    fun testHideLeavesAManagedWindowTheUserHadAlreadyClosedAlone() {
+        val projectWindow = manager.register("Project", visible = false)
+        val controller = controllerWithRecord()
+
+        controller.hideForReview()
+
+        assertEquals(
+            "an already-closed managed window must not be recorded, or restore reopens something the " +
+                "user closed on purpose",
+            emptyList<String>(),
+            controller.state.hiddenByReview,
+        )
+        assertEquals("it must not be hidden either — it already was", 0, projectWindow.hides)
+    }
+
+    /**
+     * Spec scenario "Hiding still works after a stale entry is loaded": the prune must leave the record
+     * empty, so `hideForReview` takes its normal path instead of the leftover-reclaim branch.
+     *
+     * Distinct from [testHideReclaimsALeftoverRecordInsteadOfRefusingToHide], which seeds `Leftover` —
+     * an id that is *not* pruned, and so exercises reclaim rather than prune-then-hide. Without this
+     * case, moving the prune from `loadState` into `restore()` — the alternative
+     * `layout-state-migration` rejected — would flip this scenario with nothing failing.
+     */
+    fun testHidingWorksNormallyAfterOnlyAStaleEntryWasLoaded() {
+        val projectWindow = manager.register("Project", visible = true)
+        val controller = controllerWithRecord("Review Queue")
+
+        assertEquals(
+            "the prune must have emptied the record before the hide runs",
+            emptyList<String>(),
+            controller.state.hiddenByReview,
+        )
+
+        controller.hideForReview()
+
+        assertEquals(
+            "the hide must record what it actually hid, not be vetoed by a stale leftover",
+            listOf("Project"),
+            controller.state.hiddenByReview,
+        )
+        assertFalse(projectWindow.isVisible)
     }
 
     fun testRestoreReopensAndThenForgetsTheWindowsItReopened() {

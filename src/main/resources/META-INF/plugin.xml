@@ -13,36 +13,64 @@
     <depends>Git4Idea</depends>
 
     <extensions defaultExtensionNs="com.intellij">
+        <!--
+          KAN-5 removed the tool window. The notification group stays — it is unrelated to the window,
+          and it is now how failed roots and empty scopes are reported. The startup activity stays
+          too: ReviewLayoutRestorer still restores the Project tool window after a pass.
+        -->
         <notificationGroup id="Review Queue" displayType="BALLOON"/>
-        <toolWindow id="Review Queue"
-                    anchor="right"
-                    factoryClass="dev.tweety.reviewqueue.ui.ReviewQueueToolWindowFactory"/>
         <postStartupActivity implementation="dev.tweety.reviewqueue.ui.ReviewLayoutRestorer"/>
     </extensions>
 
     <actions>
-        <group id="ReviewQueue.Toolbar" class="com.intellij.openapi.actionSystem.DefaultActionGroup">
-            <action id="ReviewQueue.Scope"
-                    class="dev.tweety.reviewqueue.ui.ScopeSelector"
-                    text="Scope"
-                    description="Choose what the review queue lists"/>
-            <action id="ReviewQueue.StartReview"
-                    class="dev.tweety.reviewqueue.actions.StartReviewAction"
-                    text="Start Review"
-                    description="Hide the side panels and walk the unreviewed files one at a time"/>
-            <action id="ReviewQueue.EndReview"
-                    class="dev.tweety.reviewqueue.actions.EndReviewAction"
-                    text="End Review"
-                    description="Leave the guided review and restore the tool windows"/>
-            <action id="ReviewQueue.Refresh"
-                    class="dev.tweety.reviewqueue.actions.RefreshQueueAction"
-                    text="Refresh"
-                    description="Re-read the review scope"/>
-            <action id="ReviewQueue.ResetAll"
-                    class="dev.tweety.reviewqueue.actions.ResetAllAction"
-                    text="Reset All"
-                    description="Clear every reviewed mark in this project"/>
-        </group>
+        <!--
+          These four lived inside a ReviewQueue.Toolbar group that KAN-5 deleted along with the tool
+          window it filled. They are declared top-level, with no add-to-group, so that every id keeps
+          a registry home: Find Action and user keymap customisation both resolve by id, and an id
+          that leaves the registry silently takes those away. End Review matters most — without it the
+          only ways out of a pass would be the diff toolbar button and closing the tab.
+        -->
+        <action id="ReviewQueue.StartReview"
+                class="dev.tweety.reviewqueue.actions.StartReviewAction"
+                text="Start Review"
+                description="Hide the Project panel and walk the unreviewed files one at a time">
+            <!--
+              macOS only, joining the Cmd+Option+Shift cluster. meta is the Windows key on $default,
+              so this ships shortcutless on Windows and Linux, where the Tools menu group and Find
+              Action are the way in. NavigationShortcutTest pins that the cluster is macOS-only.
+
+              Known, accepted overlap — three platform actions reach this chord, two different ways,
+              and the difference is the whole risk:
+                - ForceRefresh: declared on meta alt shift R in Mac OS X 10.5+. An EmptyAction
+                  shortcut holder, so never enabled itself.
+                - DatabaseView.ForceRefresh: borrows it via use-shortcut-of. Live only with the
+                  Database view focused.
+                - ReloadScriptConfiguration: does NOT borrow. It declares ctrl alt shift R on
+                  $default, and MacOSDefaultKeymap translates Ctrl to Meta, so on macOS it answers to
+                  this chord while editing a Kotlin script — any *.gradle.kts, including this
+                  plugin's own build files. This is the live contender, and the reason the accepted
+                  risk is higher than "Database view only". Do not simplify this comment back to
+                  "borrowed by": a maintainer reading it at Gate C would conclude the only live
+                  contender is Database-scoped and keep a binding that fires a chooser in build.gradle.kts.
+              None can be unbound — remove="true" strips a shortcut from our own action only. Whether
+              an action-chooser popup actually appears is a Gate C manual check, and it must be run
+              with a .gradle.kts open as well as without one. StartReviewShortcutTest pins the whole
+              overlapping id set so a platform change is not silent.
+            -->
+            <keyboard-shortcut keymap="Mac OS X 10.5+" first-keystroke="meta alt shift R"/>
+        </action>
+        <action id="ReviewQueue.EndReview"
+                class="dev.tweety.reviewqueue.actions.EndReviewAction"
+                text="End Review"
+                description="Leave the guided review and restore the Project panel"/>
+        <action id="ReviewQueue.Refresh"
+                class="dev.tweety.reviewqueue.actions.RefreshQueueAction"
+                text="Refresh"
+                description="Re-read the review scope now"/>
+        <action id="ReviewQueue.ResetAll"
+                class="dev.tweety.reviewqueue.actions.ResetAllAction"
+                text="Reset All"
+                description="Clear every reviewed mark in this project"/>
 
         <action id="ReviewQueue.ShowFileList"
                 class="dev.tweety.reviewqueue.actions.ShowFileListAction"
@@ -114,5 +142,44 @@
                 class="dev.tweety.reviewqueue.actions.ToggleReviewedAction"
                 text="Toggle Reviewed"
                 description="Add or remove the reviewed mark on this file, without moving to another file"/>
+
+        <!--
+          The out-of-session surface, replacing the deleted tool window. Declared last in <actions> on
+          purpose: <reference ref="..."> resolves at registration time and requires the referenced id
+          to already exist, so putting the group after every <action> above makes the ordering
+          requirement structural rather than something to remember.
+        -->
+        <group id="ReviewQueue.Menu" text="Review Queue" popup="true"
+               class="com.intellij.openapi.actionSystem.DefaultActionGroup">
+            <add-to-group group-id="ToolsMenu" anchor="last"/>
+
+            <!--
+              popup="true" on both groups is required: without it the children are inlined flat into
+              the parent menu. text= is required too, or the submenu renders unnamed.
+
+              A fresh id rather than reusing ReviewQueue.Scope, which was an <action> for the scope
+              combo box that KAN-5 deleted along with the tool window it sat in: reusing an action id
+              for a group would let existing keymap or menu customisation degrade silently.
+            -->
+            <group id="ReviewQueue.ScopeMenu" text="Scope" popup="true"
+                   description="Choose what the review queue lists"
+                   class="com.intellij.openapi.actionSystem.DefaultActionGroup">
+                <action id="ReviewQueue.SetStaged"
+                        class="dev.tweety.reviewqueue.actions.SetStagedAction"
+                        text="Staged"/>
+                <action id="ReviewQueue.SetBranchVsBase"
+                        class="dev.tweety.reviewqueue.actions.SetBranchVsBaseAction"
+                        text="Branch vs Base…"/>
+                <action id="ReviewQueue.SetCommitRange"
+                        class="dev.tweety.reviewqueue.actions.SetCommitRangeAction"
+                        text="Commit Range…"/>
+            </group>
+
+            <reference ref="ReviewQueue.StartReview"/>
+            <reference ref="ReviewQueue.ShowFileList"/>
+            <separator/>
+            <reference ref="ReviewQueue.Refresh"/>
+            <reference ref="ReviewQueue.ResetAll"/>
+        </group>
     </actions>
 </idea-plugin>

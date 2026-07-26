@@ -35,7 +35,14 @@ class CompletionNotifier(private val project: Project) {
      */
     private var armed: Boolean? = null
 
-    fun onSnapshot(snapshot: QueueSnapshot) {
+    /**
+     * @param announce pass false when the snapshot is the result of the reviewer asking for a
+     * *different queue* rather than of them finishing this one. The arming state is still consumed:
+     * the queue on screen really is complete, so the transition has happened, and re-announcing it
+     * later would need the queue to go incomplete and complete again — which is the same rule every
+     * other caller lives by. Only the balloon is withheld.
+     */
+    fun onSnapshot(snapshot: QueueSnapshot, announce: Boolean = true) {
         if (snapshot.items.isEmpty()) {
             if (armed != null) armed = true
             return
@@ -48,7 +55,7 @@ class CompletionNotifier(private val project: Project) {
         }
         if (armed != true) return
         armed = false
-        notifyComplete(snapshot.items.size)
+        if (announce) notifyComplete(snapshot.items.size)
     }
 
     private fun notifyComplete(count: Int) {

@@ -1,26 +1,20 @@
 package dev.tweety.reviewqueue.queue
 
-import com.intellij.dvcs.repo.VcsRepositoryManager
 import com.intellij.openapi.actionSystem.ActionManager
 import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.actionSystem.RightAlignedToolbarAction
 import com.intellij.openapi.actionSystem.Separator
-import com.intellij.openapi.vcs.ProjectLevelVcsManager
-import com.intellij.openapi.vcs.VcsDirectoryMapping
-import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.testFramework.HeavyPlatformTestCase
-import com.intellij.testFramework.PlatformTestUtil
 import dev.tweety.reviewqueue.actions.EndReviewAction
 import dev.tweety.reviewqueue.actions.diff.DiffEndReviewAction
 import dev.tweety.reviewqueue.actions.diff.DiffRefreshQueueAction
 import dev.tweety.reviewqueue.actions.diff.DiffResetAllAction
+import dev.tweety.reviewqueue.actions.diff.DiffScopeAction
 import dev.tweety.reviewqueue.actions.diff.DiffStartReviewAction
 import dev.tweety.reviewqueue.model.ReviewKey
-import dev.tweety.reviewqueue.model.ReviewScope
 import dev.tweety.reviewqueue.ui.ReviewDiffPresenter
-import kotlinx.coroutines.runBlocking
 import java.io.File
 
 /**
@@ -88,33 +82,12 @@ class ReviewSessionServiceTest : HeavyPlatformTestCase() {
         assertEquals(keys[1], service.currentKey())
     }
 
-    /** Builds a two-file Staged queue in this project's own git repo and waits for it to publish. */
-    private fun stagedQueueOfTwoFiles(): ReviewQueueService {
-        val repoDir = File(project.basePath!!)
-        repoDir.mkdirs()
-        git(repoDir, "init")
-        git(repoDir, "config", "user.email", "test@example.com")
-        git(repoDir, "config", "user.name", "Test")
-        File(repoDir, "a.txt").writeText("a\n")
-        File(repoDir, "b.txt").writeText("b\n")
-        git(repoDir, "add", "a.txt", "b.txt")
-
-        LocalFileSystem.getInstance().refreshAndFindFileByIoFile(repoDir)
-        val vcsManager = ProjectLevelVcsManager.getInstance(project)
-        vcsManager.setDirectoryMappings(listOf(VcsDirectoryMapping(repoDir.absolutePath, "Git")))
-        runBlocking { vcsManager.awaitInitialization() }
-        VcsRepositoryManager.getInstance(project).waitForAsyncTaskCompletion()
-
-        val queue = ReviewQueueService.getInstance(project)
-        queue.setScope(ReviewScope.Staged)
-        val deadlineNanos = System.nanoTime() + 60L * 1_000_000_000L
-        while (System.nanoTime() < deadlineNanos) {
-            PlatformTestUtil.dispatchAllEventsInIdeEventQueue()
-            if (queue.snapshot().items.size == 2) return queue
-        }
-        fail("timed out waiting for a two-file Staged queue; got ${queue.snapshot().items.map { it.key.relPath }}")
-        error("unreachable")
-    }
+    /**
+     * Shared with `ScopeSwitchTest` and `SetScopeActionTest`, which need the same real queue: a pass
+     * cannot start without one, so assertions about a running pass would hold vacuously.
+     */
+    private fun stagedQueueOfTwoFiles(): ReviewQueueService =
+        StagedQueueFixture.stagedQueueOfTwoFiles(project)
 
     fun testTheDiffToolbarSplitsNavigationFromRightAlignedSessionControls() {
         val actions = ReviewSessionService.getInstance(project).diffActions
@@ -136,6 +109,7 @@ class ReviewSessionServiceTest : HeavyPlatformTestCase() {
         )
         assertEquals(
             listOf(
+                DiffScopeAction::class.java,
                 DiffStartReviewAction::class.java,
                 DiffEndReviewAction::class.java,
                 DiffRefreshQueueAction::class.java,
@@ -150,6 +124,19 @@ class ReviewSessionServiceTest : HeavyPlatformTestCase() {
             "a separator must sit between the navigation group and the session controls",
             navigation.size,
             actions.indexOfFirst { it is Separator },
+        )
+    }
+
+    fun testTheScopeControlLeadsTheSessionControlGroup() {
+        val service = ReviewSessionService.getInstance(project)
+        val actions = service.diffActions
+        val separatorAt = actions.indexOfFirst { it is Separator }
+
+        assertTrue("the toolbar must still be split by a separator", separatorAt >= 0)
+        assertTrue(
+            "the scope control must lead the session-control group, so re-scoping sits with the " +
+                "other session commands rather than among per-file navigation",
+            actions[separatorAt + 1] is DiffScopeAction,
         )
     }
 
@@ -284,6 +271,76 @@ class ReviewSessionServiceTest : HeavyPlatformTestCase() {
         assertEquals(0, presenter.closed)
     }
 
+    /**
+     * The case `nextFile`'s KDoc forbids and `showCurrent`'s settle branch used to cause: the file
+     * ahead leaves the scope mid-pass, and a plain forward move ends the pass.
+     *
+     * Reachable with two in-pass button presses since `refresh-semantics` made the diff toolbar's
+     * Refresh synchronous, which is what `resolveNow` stands in for here.
+     */
+    fun testNextFileStaysPutWhenNothingAheadIsStillInTheQueue() {
+        val queue = stagedQueueOfTwoFiles()
+        val keys = queue.snapshot().items.map { it.key }
+        val service = ReviewSessionService.getInstance(project)
+        val presenter = FakePresenter()
+        service.presenter = presenter
+
+        service.start()
+        assertEquals(keys[0], service.currentKey())
+
+        StagedQueueFixture.git(File(project.basePath!!), "rm", "--cached", keys[1].relPath)
+        queue.progressRunner = { _, work -> work() }
+        assertTrue(queue.resolveNow())
+        assertEquals(
+            "the file ahead must genuinely have left the queue, or this asserts nothing",
+            listOf(keys[0]),
+            queue.snapshot().items.map { it.key },
+        )
+
+        service.nextFile()
+
+        assertTrue("a plain forward move must never end the pass", service.isActive)
+        assertEquals(
+            "with nothing live ahead the reviewer must stay on the file they are reading",
+            keys[0],
+            service.currentKey(),
+        )
+        assertEquals("staying put must not re-show the file", listOf(keys[0]), presenter.shown)
+        assertEquals(0, presenter.closed)
+    }
+
+    /**
+     * The milder form of the same defect: `back()` then a forward settle lands on the file already on
+     * screen, so the tab is closed and reopened and the scroll position is lost.
+     */
+    fun testPreviousStaysPutWhenTheFileBehindHasLeftTheQueue() {
+        val queue = stagedQueueOfTwoFiles()
+        val keys = queue.snapshot().items.map { it.key }
+        val service = ReviewSessionService.getInstance(project)
+        val presenter = FakePresenter()
+        service.presenter = presenter
+
+        service.start()
+        service.nextFile()
+        assertEquals(keys[1], service.currentKey())
+
+        StagedQueueFixture.git(File(project.basePath!!), "rm", "--cached", keys[0].relPath)
+        queue.progressRunner = { _, work -> work() }
+        assertTrue(queue.resolveNow())
+        assertEquals(listOf(keys[1]), queue.snapshot().items.map { it.key })
+
+        service.previous()
+
+        assertTrue(service.isActive)
+        assertEquals(keys[1], service.currentKey())
+        assertEquals(
+            "with nothing live behind, Previous File must not re-show the current file and lose the " +
+                "scroll position",
+            listOf(keys[0], keys[1]),
+            presenter.shown,
+        )
+    }
+
     fun testIsAtLastFileTracksTheCursor() {
         val queue = stagedQueueOfTwoFiles()
         val service = ReviewSessionService.getInstance(project)
@@ -293,14 +350,5 @@ class ReviewSessionServiceTest : HeavyPlatformTestCase() {
         assertFalse("two files: the first is not the last", service.isAtLastFile)
         service.nextFile()
         assertTrue(service.isAtLastFile)
-    }
-
-    private fun git(dir: File, vararg args: String) {
-        val process = ProcessBuilder(listOf("git", *args))
-            .directory(dir)
-            .redirectErrorStream(true)
-            .start()
-        val output = process.inputStream.bufferedReader().readText()
-        check(process.waitFor() == 0) { "git ${args.joinToString(" ")} failed:\n$output" }
     }
 }
