@@ -49,28 +49,20 @@ W=<worktree>            # and repeat for every submodule root
 
 ## 5. Mark Reviewed advances the queue — the core interaction
 
-This is the plugin's central behavior and has not been observed running before this checklist.
+**Superseded — see section 20.** Mark Reviewed no longer lives in the tool window toolbar and does
+not act on a tree selection. It lives on the diff viewer's own toolbar (and on
+<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Space</kbd>) and only appears once a guided pass is running.
+Run section 20 for the current mechanism; this section is kept only so the numbering below does not
+shift.
 
-1. Select the first unreviewed file in the tree.
-2. Click **Mark Reviewed** (toolbar).
-3. **Expected:**
-   - The file just marked shows a "✓ reviewed" suffix in the tree.
-   - The progress label's `N` increments by 1.
-   - Selection moves to the next unreviewed file in queue order (root order, then path order) —
-     not to a random file, not staying on the same file.
-4. Repeat until every file is marked, confirming each step advances correctly and the last mark
-   does not throw or freeze the UI.
+## 6. Diff tab opens on click, outside a session
 
-**Note on ordering:** the cursor advances in *queue* order — git roots in the order the repository
-manager reports them, then path order within each root. Under directory grouping the tree draws
-rows in a different visual order, so the next selection may not be the row directly below the one
-you just marked. That is expected; judge correctness against root-then-path order, not against
-what the tree looks like.
+This covers **browsing** a file from the tool window when no guided review is running — distinct
+from the guided flow in section 20, where advancing happens inside the diff viewer itself. The two
+are not in tension: clicking a row still opens that file's diff at any time, session or not.
 
-## 6. Diff tab is single and reused
-
-1. With several files still unreviewed, click on file A in the tree. Note the diff opens in an
-   editor tab.
+1. With several files still unreviewed and no review in progress, click on file A in the tree.
+   Note the diff opens in an editor tab.
 2. Click on file B. **Expected:** the same tab updates to show B's diff — no second tab is opened.
    Check the editor tab strip; there should be exactly one tab related to this queue (titled
    "Review Queue" or similar), not one per file clicked.
@@ -78,7 +70,7 @@ what the tree looks like.
 
 ## 7. Reviewed marks survive an IDE restart
 
-1. Mark at least one file reviewed (if not already done in step 5).
+1. Mark at least one file reviewed (if not already done in section 20).
 2. Note which files are marked.
 3. Close the IDE completely and reopen the same project.
 4. Open the Review Queue tool window again.
@@ -333,7 +325,9 @@ happen in the diff viewer once a review is running. This section checks that flo
 
 6. **Start Review after a fix round walks only the changed files.**
    - Finish or end a review with every file marked. Edit and re-stage exactly one of the
-     previously-reviewed files (as in section 8).
+     previously-reviewed files, the same content-addressed drop-back that section 8 checks outside
+     a session — re-staging one file returns exactly that file to unreviewed, whether or not a
+     review happens to be running when it happens.
    - Click **Start Review** again. **Expected:** the pass covers only that one file — Start Review
      is disabled with nothing unreviewed, and once something is unreviewed it opens only that.
 
@@ -343,6 +337,29 @@ happen in the diff viewer once a review is running. This section checks that flo
    action to act on. That code path is fixed. Confirm directly: during a review (or with a file
    selected in the tool window before Start Review), Toggle Reviewed is enabled and works as
    described in step 4/section 15, not greyed out.
+
+8. **The tab title tracks progress forward, not just on the first file and one step back.**
+   - Start Review in a scope with at least four unreviewed files. Note the diff tab title —
+     **Expected:** `Review 1/M - <first file's name>`.
+   - Click **Mark Reviewed**. **Expected:** the title updates to `Review 2/M - <second file's
+     name>` — both the count and the filename change together.
+   - Click **Mark Reviewed** twice more. **Expected:** the title reads `Review 3/M - <third file's
+     name>` after the first of those two clicks, then `Review 4/M - <fourth file's name>` after the
+     second — the count advances by exactly one per mark and the filename always matches the file
+     actually on screen, not the previous one.
+
+9. **The completion balloon fires from the diff toolbar, not the tool window.**
+   Section 10 above was written for marking from the tool window, which no longer exists as a way
+   to mark a file — this is the equivalent check for the current mechanism.
+   - Working in a worktree whose current branch is `openspec/<some-name>`, start a review that
+     covers every remaining unreviewed file.
+   - Mark every file except the last one however you like, then mark the **last** one either by
+     clicking **Mark Reviewed** on the diff toolbar or by pressing
+     <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Space</kbd>.
+   - **Expected, all together:** the completion balloon fires exactly once, with an action button
+     reading **Copy `/myflow-do-done <name>`**; both tool windows come back; and the diff tab
+     closes. This is the session ending because the queue is complete, not because you clicked End
+     Review.
 
 ---
 
@@ -355,8 +372,8 @@ the code — only from having done it in the IDE):
 - [ ] 2. Found a Gate B worktree
 - [ ] 3. Tool window lists staged files, grouped by root
 - [ ] 4. Progress label correct
-- [ ] 5. Mark Reviewed advances the queue
-- [ ] 6. Single reused diff tab
+- [ ] 5. Superseded by section 20 — no separate sign-off needed
+- [ ] 6. Diff opens on click outside a session (single reused tab)
 - [ ] 7. Marks survive IDE restart
 - [ ] 8. Re-staging returns exactly the edited file
 - [ ] 9. Three scopes work; commit-range rejects space/`;`
@@ -380,3 +397,5 @@ the code — only from having done it in the IDE):
 - [ ] 20e. Ctrl+Shift+Space marks in the diff and does not shadow Smart Type Completion elsewhere
 - [ ] 20f. Start Review after a fix round walks only the changed file(s)
 - [ ] 20g. Toggle Reviewed enables (re-test: previously looked permanently disabled)
+- [ ] 20h. Tab title tracks progress forward through at least three consecutive marks
+- [ ] 20i. Completion balloon fires from marking the last file via the diff toolbar/shortcut
