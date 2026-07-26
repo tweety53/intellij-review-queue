@@ -23,9 +23,10 @@ class MarkReviewedAction : AnAction(
      * nothing in a normal editor. Without this gate the chord there would silently mark whichever
      * file the review happens to be sitting on.
      *
-     * This is not about a keymap collision: the bindings are chords that are free in both
-     * `$default` and the macOS keymap (see MarkReviewedShortcutTest). The gate earns its place
-     * independently of that.
+     * This is not about a keymap collision, and it is not what makes a shortcut fail to fire: the
+     * gate was twice suspected of that and twice innocent. It is verified working on the keyboard
+     * path — the same chord that reaches this action from the toolbar reaches it from the diff
+     * editor. See MarkReviewedShortcutTest for the chord's own constraints.
      */
     override fun update(e: AnActionEvent) {
         val project = e.getData(CommonDataKeys.PROJECT)

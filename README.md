@@ -30,10 +30,16 @@ The diff viewer's own toolbar carries two groups. On the left, the actions for t
 - **Previous File** — steps back to the file shown before this one, without changing any mark. Use
   it together with **Toggle Reviewed** to fix a mis-mark: step back, toggle the wrong mark off, then
   Mark Reviewed to continue from there.
-- **Mark Reviewed** (also <kbd>Cmd</kbd>+<kbd>Shift</kbd>+<kbd>Space</kbd> on macOS,
-  <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>Space</kbd> on Windows and Linux) — marks the
-  file on screen reviewed and opens the next unreviewed one. Advancing **replaces** the diff tab
-  rather than opening a new one, so there is only ever one review tab.
+- **Mark Reviewed** (also <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>V</kbd>, which is
+  <kbd>⌥</kbd><kbd>⇧</kbd><kbd>V</kbd> on macOS) — marks the file on screen reviewed and opens the
+  next unreviewed one. Advancing **replaces** the diff tab rather than opening a new one, so there is
+  only ever one review tab.
+
+  One chord on every platform, declared once against `$default` and inherited by the rest. Two
+  earlier attempts used the space bar and both failed: <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Space</kbd>
+  is Smart Type Completion in the bundled keymaps, and on macOS the entire Cmd+Space family is
+  swallowed by input-source switching as soon as a second input source is installed — the OS takes
+  the key before the IDE ever sees it. If you rebind this, avoid the space bar.
 - **Toggle Reviewed** — adds or removes the reviewed mark on the file currently on screen without
   moving to another file.
 
