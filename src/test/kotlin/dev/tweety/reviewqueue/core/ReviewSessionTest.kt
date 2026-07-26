@@ -2,6 +2,7 @@ package dev.tweety.reviewqueue.core
 
 import dev.tweety.reviewqueue.model.ReviewKey
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
@@ -54,6 +55,21 @@ class ReviewSessionTest {
     fun `back at the first file is a no-op`() {
         val first = ReviewSession.start(keys)!!
         assertSame(first, first.back())
+    }
+
+    @Test
+    fun `isAtLast is true only on the final file`() {
+        assertFalse(ReviewSession(keys, 0).isAtLast)
+        assertFalse(ReviewSession(keys, 1).isAtLast)
+        assertTrue(ReviewSession(keys, 2).isAtLast)
+    }
+
+    /** A one-file pass sits on both ends at once, so neither Previous nor Next File has anywhere to go. */
+    @Test
+    fun `a single-file pass is at both the first and the last file`() {
+        val only = ReviewSession.start(listOf(key("a.kt")))!!
+        assertTrue(only.isAtFirst)
+        assertTrue(only.isAtLast)
     }
 
     @Test

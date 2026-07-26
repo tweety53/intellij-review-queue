@@ -65,6 +65,7 @@ class ReviewSessionService(private val project: Project) : Disposable {
         listOfNotNull(
             manager.getAction("ReviewQueue.ShowFileList"),
             manager.getAction("ReviewQueue.PreviousFile"),
+            manager.getAction("ReviewQueue.NextFile"),
             manager.getAction("ReviewQueue.MarkReviewed"),
             manager.getAction("ReviewQueue.ToggleReviewed"),
         ) + listOf(
@@ -93,6 +94,9 @@ class ReviewSessionService(private val project: Project) : Disposable {
 
     /** True when the pass is sitting on its first file, where Previous File has nothing to do. */
     val isAtFirstFile: Boolean get() = session?.isAtFirst ?: false
+
+    /** True when the pass is sitting on its last file, where Next File has nothing to do. */
+    val isAtLastFile: Boolean get() = session?.isAtLast ?: false
 
     fun currentKey(): ReviewKey? = session?.current
 
@@ -139,6 +143,20 @@ class ReviewSessionService(private val project: Project) : Disposable {
         val active = session ?: return
         if (active.isAtFirst) return
         session = active.back()
+        showCurrent()
+    }
+
+    /**
+     * Forward one file, marks untouched — the counterpart to [previous].
+     *
+     * Deliberately not routed through the private `advance()`, which ends the pass when it runs off
+     * the end because that is what marking the last file should do. A plain forward move off the last
+     * file has nothing to do and must leave the reviewer where they are.
+     */
+    fun nextFile() {
+        val active = session ?: return
+        val next = active.advance() ?: return
+        session = next
         showCurrent()
     }
 
