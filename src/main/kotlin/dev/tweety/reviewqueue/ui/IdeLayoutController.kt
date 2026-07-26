@@ -42,15 +42,28 @@ class IdeLayoutController(private val project: Project) :
         if (myState.hiddenByReview.isNotEmpty()) return
         val manager = ToolWindowManager.getInstance(project)
         val hidden = MANAGED_IDS.filter { manager.getToolWindow(it)?.isVisible == true }
-        hidden.forEach { manager.getToolWindow(it)?.hide(null) }
+        // Recorded before the windows are hidden: if hiding threw part-way, the record must already
+        // name everything this call touched, or a window is hidden with nothing to reopen it.
         myState.hiddenByReview = hidden.toMutableList()
+        hidden.forEach { manager.getToolWindow(it)?.hide(null) }
     }
 
-    /** Reopens whatever [hideForReview] hid, then forgets it. Safe to call when nothing was hidden. */
+    /**
+     * Reopens whatever [hideForReview] hid, then forgets only what it actually reopened. Safe to
+     * call when nothing was hidden.
+     *
+     * An id that does not resolve to a registered tool window stays on the record. Tool-window
+     * registration is not guaranteed complete when [ReviewLayoutRestorer] runs at post-startup, and
+     * dropping an unresolved id would leave that window hidden with no record that it ever was.
+     */
     fun restore() {
         val manager = ToolWindowManager.getInstance(project)
-        myState.hiddenByReview.forEach { manager.getToolWindow(it)?.show(null) }
-        myState.hiddenByReview = mutableListOf()
+        val unresolved = mutableListOf<String>()
+        myState.hiddenByReview.forEach { id ->
+            val window = manager.getToolWindow(id)
+            if (window == null) unresolved += id else window.show(null)
+        }
+        myState.hiddenByReview = unresolved
     }
 
     companion object {
