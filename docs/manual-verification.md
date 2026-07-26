@@ -495,3 +495,12 @@ the code — only from having done it in the IDE):
 - [ ] 21d. Start Review is visibly disabled on the diff toolbar during a pass
 - [ ] 21e. Refresh in the *tool window* still acts on one click with no dialog
 - [ ] 21f. Find Action lists each of Start Review / End Review / Refresh / Reset All exactly once
+- [ ] 22a. The file list opens from the diff toolbar and lists every file in scope, reviewed ones
+      marked, with the file on screen preselected and the title showing `N / M reviewed`
+- [ ] 22b. Picking another file in the pass swaps the diff and moves the tab title's `Review N/M`;
+      marking then continues from there
+- [ ] 22c. Picking a file that was already reviewed when the pass started opens a browsing diff and
+      leaves the pass and its progress untouched
+- [ ] 22d. Speed-search filtering in the popup selects the right file
+- [ ] 22e. Jumping to a file that has left the queue lands on the next live file, never on a blank
+      diff

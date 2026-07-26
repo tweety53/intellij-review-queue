@@ -125,6 +125,7 @@ class ReviewSessionServiceTest : HeavyPlatformTestCase() {
         assertEquals(
             "navigation actions must be resolved by id, or their tooltips lose the shortcut",
             listOf(
+                manager.getAction("ReviewQueue.ShowFileList"),
                 manager.getAction("ReviewQueue.PreviousFile"),
                 manager.getAction("ReviewQueue.MarkReviewed"),
                 manager.getAction("ReviewQueue.ToggleReviewed"),
@@ -139,6 +140,13 @@ class ReviewSessionServiceTest : HeavyPlatformTestCase() {
                 DiffResetAllAction::class.java,
             ),
             sessionControls.map { it.javaClass },
+        )
+    }
+
+    fun testTheFileListActionIsRegistered() {
+        assertNotNull(
+            "an unregistered id resolves to null and listOfNotNull drops it silently",
+            ActionManager.getInstance().getAction("ReviewQueue.ShowFileList"),
         )
     }
 

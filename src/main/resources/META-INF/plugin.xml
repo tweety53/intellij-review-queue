@@ -44,6 +44,10 @@
                     description="Clear every reviewed mark in this project"/>
         </group>
 
+        <action id="ReviewQueue.ShowFileList"
+                class="dev.tweety.reviewqueue.actions.ShowFileListAction"
+                text="Show File List"
+                description="List every file in the review scope with its reviewed state"/>
         <action id="ReviewQueue.PreviousFile"
                 class="dev.tweety.reviewqueue.actions.PreviousFileAction"
                 text="Previous File"

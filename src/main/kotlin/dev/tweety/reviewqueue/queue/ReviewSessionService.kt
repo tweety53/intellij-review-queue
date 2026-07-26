@@ -53,6 +53,7 @@ class ReviewSessionService(private val project: Project) : Disposable {
     internal val diffActions: List<AnAction> by lazy {
         val manager = ActionManager.getInstance()
         listOfNotNull(
+            manager.getAction("ReviewQueue.ShowFileList"),
             manager.getAction("ReviewQueue.PreviousFile"),
             manager.getAction("ReviewQueue.MarkReviewed"),
             manager.getAction("ReviewQueue.ToggleReviewed"),
