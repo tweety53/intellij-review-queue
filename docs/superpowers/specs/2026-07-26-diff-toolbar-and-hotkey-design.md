@@ -23,8 +23,9 @@ pass:
 **In scope**
 
 - A conflict-free Mark Reviewed shortcut on every platform.
-- Start Review, End Review, Refresh and Reset All on the diff viewer's toolbar, right-aligned and
-  confirming.
+- Start Review, End Review, Refresh and Reset All on the diff viewer's toolbar, grouped apart from
+  the navigation actions and confirming. (Designed as right-aligned; see *Known risk* under *Two
+  groups on the diff toolbar* for why that was not achievable and what shipped instead.)
 - A file-list popup opened from the diff toolbar, showing every file in scope with its reviewed
   state, and navigating to the picked file.
 
@@ -74,8 +75,14 @@ The diff toolbar splits by meaning:
 buttons, one confirming and one not, is a trap: the muscle memory built on the unconfirmed one fires
 the confirmed one and vice versa.
 
-Right alignment comes from `com.intellij.openapi.actionSystem.RightAlignedToolbarAction`, a marker
-interface the toolbar layout honours. It is present in 2026.2 (`lib/intellij.platform.editor.ui.jar`).
+Right alignment was designed to come from `com.intellij.openapi.actionSystem.RightAlignedToolbarAction`,
+a marker interface present in 2026.2 (`lib/intellij.platform.editor.ui.jar`). The interface itself is
+honoured, by `ActionToolbarImpl.fillToolBar` — that half holds. What defeats it here is the diff
+header's own placement of that toolbar: `DiffHeaderToolbarUtil.createLayoutPanel` lays it out with
+`AlignX.LEFT`, which anchors the whole toolbar at its preferred width on the left with no right edge
+inside the surrounding panel for the marker to push against. The marker being honoured and the
+alignment being achievable are two different claims; only the first is true here. See *Known risk*
+below for the full read and what shipped as a result.
 
 **Known risk — resolved, unfavourably.** Confirmed by reading 2026.2 platform bytecode, not by a
 visual check: `RightAlignedToolbarAction` *is* honoured by `ActionToolbarImpl.fillToolBar`, and
@@ -177,7 +184,7 @@ the same behaviour marking already has and needs no special case.
 | `ui/ReviewFileListPopup` | Builds and shows the chooser; routes the pick | `ReviewFileList`, session service, `ReviewDiffOpener` |
 | `actions/ShowFileListAction` | Toolbar entry point, diff-scoped | popup |
 | `actions/Confirm.kt` | One `Messages.showYesNoDialog` shape | platform |
-| `actions/diff/*` | Confirmation plus right alignment over the four existing actions | those actions |
+| `actions/diff/*` | Confirmation plus the (designed-right-aligned, shipped-separator-grouped — see *Known risk*) marker over the four existing actions | those actions |
 | `queue/ReviewSessionService.jumpTo` | Applies a jump and re-shows | `ReviewSession` |
 
 ## Testing
@@ -192,13 +199,16 @@ New pure logic is unit-tested without an IDE, matching the existing suite:
 - `ReviewSessionServiceTest` — `jumpTo` a session key shows that file through the fake presenter;
   `jumpTo` an unknown key leaves the session where it was.
 
-The popup's Swing wiring, the right alignment and the confirmation dialogs are not unit tested —
-they need a live IDE. They go into `docs/manual-verification.md` as checklist items, which is how
-this repo already handles UI:
+The popup's Swing wiring, the toolbar grouping and the confirmation dialogs are not unit tested —
+they need a live IDE. (The grouping was designed as right alignment; per *Known risk* that is not
+achievable in this toolbar, so what a human actually checks is the separator-grouped placement that
+shipped instead.) They go into `docs/manual-verification.md` as checklist items, which is how this
+repo already handles UI:
 
 - Cmd+Shift+Space marks and advances on macOS; Ctrl+Alt+Shift+Space does on Windows/Linux; neither
   chord triggers completion.
-- The four session controls sit flush right on the diff toolbar and each asks before acting.
+- The four session controls sit grouped after a separator on the diff toolbar (not flush right — see
+  *Known risk*) and each asks before acting.
 - Start Review is visibly disabled during a pass.
 - The file list opens from the diff toolbar, shows every file with its reviewed state, preselects
   the current file, and jumping to another file in the pass updates the tab title and progress.

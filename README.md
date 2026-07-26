@@ -99,8 +99,12 @@ IntelliJ IDEA Ultimate 2026.2 or newer (build 262+), with the bundled Git4Idea p
   plugin loads cleanly — `dev.tweety.reviewqueue` does not appear in the platform's "Problems
   found loading plugins" block and nothing else in the log mentions the plugin. No UI interaction
   was possible in that environment: whether the diff toolbar's two groups
-  (`DiffUserDataKeys.CONTEXT_ACTIONS` on the chain, see `EditorTabDiffPresenter`) actually render as
-  designed — including whether the right-hand group renders flush right — and every other
-  guided-review interaction, remains **unverified by a human**. See
+  (`DiffUserDataKeys.CONTEXT_ACTIONS` on the chain, see `EditorTabDiffPresenter`) actually render —
+  and every other guided-review interaction — remains **unverified by a human**. One part of that
+  question is already settled without a display, though: whether the right-hand group renders flush
+  right does not require a human to check, because reading the 2026.2 platform's toolbar-layout
+  bytecode is enough to show it cannot, regardless of what a screenshot would show. A `Separator`
+  ships instead, grouping the four controls rather than flushing them right — see the design doc's
+  *Known risk* for the bytecode read. See
   `docs/manual-verification.md` for the checklist a human with a real display must run before
   relying on this plugin — section 20 covers the guided review flow specifically.
