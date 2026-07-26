@@ -488,3 +488,10 @@ the code — only from having done it in the IDE):
 - [ ] 20l. Closing the project mid-session restores the layout (and so does quitting the IDE)
 - [ ] 20m. Start Review from Find Action, tool window never opened: all four diff buttons present,
       and End Review does not pop the Review Queue panel open
+- [ ] 21a. The four session controls (Start Review, End Review, Refresh, Reset All) sit flush right
+      on the review diff toolbar, visually separated from the navigation buttons
+- [ ] 21b. Each of the four asks before acting, and answering No leaves the pass exactly as it was
+- [ ] 21c. Reset All from the diff toolbar shows **one** dialog, not two
+- [ ] 21d. Start Review is visibly disabled on the diff toolbar during a pass
+- [ ] 21e. Refresh in the *tool window* still acts on one click with no dialog
+- [ ] 21f. Find Action lists each of Start Review / End Review / Refresh / Reset All exactly once

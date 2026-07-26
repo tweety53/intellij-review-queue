@@ -8,7 +8,7 @@ import com.intellij.openapi.actionSystem.CommonDataKeys
 import dev.tweety.reviewqueue.queue.ReviewSessionService
 
 /** Leaves the guided pass and restores the layout. Marks already made are kept. */
-class EndReviewAction : AnAction(
+open class EndReviewAction : AnAction(
     "End Review",
     "Leave the guided review and restore the tool windows",
     AllIcons.Actions.Exit,

@@ -1,13 +1,21 @@
 package dev.tweety.reviewqueue.queue
 
 import com.intellij.dvcs.repo.VcsRepositoryManager
+import com.intellij.openapi.actionSystem.ActionManager
 import com.intellij.openapi.actionSystem.AnAction
+import com.intellij.openapi.actionSystem.AnActionEvent
+import com.intellij.openapi.actionSystem.RightAlignedToolbarAction
 import com.intellij.openapi.vcs.ProjectLevelVcsManager
 import com.intellij.openapi.vcs.VcsDirectoryMapping
 import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.testFramework.HeavyPlatformTestCase
 import com.intellij.testFramework.PlatformTestUtil
+import dev.tweety.reviewqueue.actions.EndReviewAction
+import dev.tweety.reviewqueue.actions.diff.DiffEndReviewAction
+import dev.tweety.reviewqueue.actions.diff.DiffRefreshQueueAction
+import dev.tweety.reviewqueue.actions.diff.DiffResetAllAction
+import dev.tweety.reviewqueue.actions.diff.DiffStartReviewAction
 import dev.tweety.reviewqueue.model.ReviewKey
 import dev.tweety.reviewqueue.model.ReviewScope
 import dev.tweety.reviewqueue.ui.ReviewDiffPresenter
@@ -105,6 +113,51 @@ class ReviewSessionServiceTest : HeavyPlatformTestCase() {
         }
         fail("timed out waiting for a two-file Staged queue; got ${queue.snapshot().items.map { it.key.relPath }}")
         error("unreachable")
+    }
+
+    fun testTheDiffToolbarSplitsNavigationFromRightAlignedSessionControls() {
+        val actions = ReviewSessionService.getInstance(project).diffActions
+        val manager = ActionManager.getInstance()
+
+        val navigation = actions.filterNot { it is RightAlignedToolbarAction }
+        val sessionControls = actions.filterIsInstance<RightAlignedToolbarAction>()
+
+        assertEquals(
+            "navigation actions must be resolved by id, or their tooltips lose the shortcut",
+            listOf(
+                manager.getAction("ReviewQueue.PreviousFile"),
+                manager.getAction("ReviewQueue.MarkReviewed"),
+                manager.getAction("ReviewQueue.ToggleReviewed"),
+            ),
+            navigation,
+        )
+        assertEquals(
+            listOf(
+                DiffStartReviewAction::class.java,
+                DiffEndReviewAction::class.java,
+                DiffRefreshQueueAction::class.java,
+                DiffResetAllAction::class.java,
+            ),
+            sessionControls.map { it.javaClass },
+        )
+    }
+
+    /** Two End buttons, one confirming and one not, is a trap: muscle memory fires the wrong one. */
+    fun testEndReviewAppearsExactlyOnceOnTheDiffToolbar() {
+        val ends = ReviewSessionService.getInstance(project).diffActions
+            .filter { it is EndReviewAction }
+        assertEquals("End Review must appear once, as the confirming variant", 1, ends.size)
+        assertTrue(ends.single() is DiffEndReviewAction)
+    }
+
+    /** Overriding actionPerformed here would stack a second dialog on the parent's own. */
+    fun testResetAllIsNotDoubleConfirmed() {
+        try {
+            DiffResetAllAction::class.java.getDeclaredMethod("actionPerformed", AnActionEvent::class.java)
+            fail("DiffResetAllAction must not override actionPerformed; ResetAllAction already confirms")
+        } catch (expected: NoSuchMethodException) {
+            // The marker interface is the whole of this subclass.
+        }
     }
 
     private fun git(dir: File, vararg args: String) {

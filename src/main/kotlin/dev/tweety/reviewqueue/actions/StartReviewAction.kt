@@ -9,7 +9,7 @@ import dev.tweety.reviewqueue.queue.ReviewQueueService
 import dev.tweety.reviewqueue.queue.ReviewSessionService
 
 /** Begins a guided pass over everything still unreviewed in the current scope. */
-class StartReviewAction : AnAction(
+open class StartReviewAction : AnAction(
     "Start Review",
     "Hide the side panels and walk the unreviewed files one at a time",
     AllIcons.Actions.Execute,

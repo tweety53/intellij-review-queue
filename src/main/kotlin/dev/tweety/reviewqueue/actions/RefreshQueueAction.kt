@@ -8,7 +8,7 @@ import com.intellij.openapi.actionSystem.CommonDataKeys
 import dev.tweety.reviewqueue.queue.ReviewQueueService
 
 /** Re-resolves and re-hashes the queue on demand, for changes that arrive without a VCS event. */
-class RefreshQueueAction : AnAction("Refresh", "Re-read the review scope", AllIcons.Actions.Refresh) {
+open class RefreshQueueAction : AnAction("Refresh", "Re-read the review scope", AllIcons.Actions.Refresh) {
 
     override fun getActionUpdateThread() = ActionUpdateThread.EDT
 

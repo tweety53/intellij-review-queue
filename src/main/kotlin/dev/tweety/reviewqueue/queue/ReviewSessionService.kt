@@ -10,6 +10,10 @@ import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.fileEditor.FileEditorManagerListener
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFile
+import dev.tweety.reviewqueue.actions.diff.DiffEndReviewAction
+import dev.tweety.reviewqueue.actions.diff.DiffRefreshQueueAction
+import dev.tweety.reviewqueue.actions.diff.DiffResetAllAction
+import dev.tweety.reviewqueue.actions.diff.DiffStartReviewAction
 import dev.tweety.reviewqueue.core.ReviewSession
 import dev.tweety.reviewqueue.model.ReviewKey
 import dev.tweety.reviewqueue.ui.EditorTabDiffPresenter
@@ -34,17 +38,29 @@ class ReviewSessionService(private val project: Project) : Disposable {
     private var session: ReviewSession? = null
 
     /**
-     * Resolved here rather than handed in by the tool window: Start Review is reachable from Find
-     * Action without the panel ever being constructed, and a guided diff with no toolbar buttons
-     * strands the user with only the keyboard shortcut and a tab close as the way out.
+     * The diff viewer's toolbar, in two groups: per-file navigation on the left, session and queue
+     * controls right-aligned via `RightAlignedToolbarAction`.
+     *
+     * The navigation actions are resolved by id, because that is what makes the button tooltip
+     * carry the keyboard shortcut, and because Start Review is reachable from Find Action without
+     * the tool window ever being constructed — a guided diff with no toolbar buttons strands the
+     * user with only a tab close as the way out.
+     *
+     * The four session controls are constructed directly instead. Registering the confirming
+     * variants in plugin.xml would list them in Find Action beside the originals: eight entries for
+     * four commands, half of them confirming and half not.
      */
-    private val diffActions: List<AnAction> by lazy {
+    internal val diffActions: List<AnAction> by lazy {
         val manager = ActionManager.getInstance()
         listOfNotNull(
             manager.getAction("ReviewQueue.PreviousFile"),
             manager.getAction("ReviewQueue.MarkReviewed"),
             manager.getAction("ReviewQueue.ToggleReviewed"),
-            manager.getAction("ReviewQueue.EndReview"),
+        ) + listOf(
+            DiffStartReviewAction(),
+            DiffEndReviewAction(),
+            DiffRefreshQueueAction(),
+            DiffResetAllAction(),
         )
     }
 
