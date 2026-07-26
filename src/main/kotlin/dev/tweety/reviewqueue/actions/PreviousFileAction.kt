@@ -1,5 +1,6 @@
 package dev.tweety.reviewqueue.actions
 
+import com.intellij.diff.tools.util.DiffDataKeys
 import com.intellij.icons.AllIcons
 import com.intellij.openapi.actionSystem.ActionUpdateThread
 import com.intellij.openapi.actionSystem.AnAction
@@ -22,7 +23,10 @@ class PreviousFileAction : AnAction(
     override fun update(e: AnActionEvent) {
         val project = e.getData(CommonDataKeys.PROJECT)
         val service = project?.let { ReviewSessionService.getInstance(it) }
-        e.presentation.isEnabled = service != null && service.isActive && service.currentKey() != null
+        // Diff-viewer only, and never at the first file: there is nothing to step back to.
+        e.presentation.isEnabled = service != null && service.isActive && service.currentKey() != null &&
+            !service.isAtFirstFile &&
+            e.getData(DiffDataKeys.DIFF_CONTEXT) != null
     }
 
     override fun actionPerformed(e: AnActionEvent) {

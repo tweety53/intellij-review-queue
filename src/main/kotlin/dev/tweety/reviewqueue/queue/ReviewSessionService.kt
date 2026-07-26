@@ -5,11 +5,11 @@ import com.intellij.openapi.actionSystem.ActionManager
 import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
+import com.intellij.openapi.diagnostic.thisLogger
 import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.fileEditor.FileEditorManagerListener
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFile
-import com.intellij.openapi.wm.ToolWindowManager
 import dev.tweety.reviewqueue.core.ReviewSession
 import dev.tweety.reviewqueue.model.ReviewKey
 import dev.tweety.reviewqueue.ui.EditorTabDiffPresenter
@@ -63,6 +63,9 @@ class ReviewSessionService(private val project: Project) : Disposable {
 
     val isActive: Boolean get() = session != null
 
+    /** True when the pass is sitting on its first file, where Previous File has nothing to do. */
+    val isAtFirstFile: Boolean get() = session?.isAtFirst ?: false
+
     fun currentKey(): ReviewKey? = session?.current
 
     fun start() {
@@ -77,10 +80,26 @@ class ReviewSessionService(private val project: Project) : Disposable {
         showCurrent()
     }
 
+    /**
+     * Marks the file on screen and moves on — unless the mark did not land.
+     *
+     * A background rebuild (a fix round, a `git add`, an IDE save) can drop the current file from
+     * the queue while the user is reading it. `markReviewed` then stores nothing, and advancing
+     * anyway would skip the file unmarked with no signal at all: the progress count would not move
+     * and the user would never know. Re-show instead, which re-settles against the live queue and
+     * lands on something real or ends the pass.
+     */
     fun markCurrent() {
         val key = session?.current ?: return
-        queue.markReviewed(key)
-        advance()
+        if (queue.markReviewed(key)) {
+            advance()
+        } else {
+            thisLogger().warn(
+                "Review Queue: ${key.storageKey()} left the queue before it could be marked; " +
+                    "re-settling instead of advancing"
+            )
+            showCurrent()
+        }
     }
 
     fun toggleCurrent() {
@@ -99,8 +118,10 @@ class ReviewSessionService(private val project: Project) : Disposable {
     fun end() {
         session = null
         presenter.close()
+        // Deliberately no explicit show of the Review Queue tool window: restore() already reopens
+        // it when it was open before the session. Forcing it open pops a panel the user never had
+        // when the review was started from Find Action.
         layout.restore()
-        ToolWindowManager.getInstance(project).getToolWindow("Review Queue")?.show(null)
     }
 
     private fun advance() {

@@ -186,11 +186,17 @@ class ReviewQueueService(private val project: Project) : Disposable {
         fireChanged()
     }
 
-    /** Marks [key] reviewed at its current content hash. No-op when the key is not in the queue. */
-    fun markReviewed(key: ReviewKey) {
-        val item = items.firstOrNull { it.key == key } ?: return
+    /**
+     * Marks [key] reviewed at its current content hash.
+     *
+     * Returns false when the key is no longer in the queue and nothing was stored, so a caller that
+     * would otherwise move on can tell a silent no-op from a real mark.
+     */
+    fun markReviewed(key: ReviewKey): Boolean {
+        val item = items.firstOrNull { it.key == key } ?: return false
         state.markReviewed(item)
         fireChanged()
+        return true
     }
 
     fun resetAll() {
