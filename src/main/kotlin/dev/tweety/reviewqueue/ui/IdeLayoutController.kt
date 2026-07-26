@@ -36,10 +36,17 @@ class IdeLayoutController(private val project: Project) :
 
     /** Hides the managed windows that are currently visible, remembering which they were. */
     fun hideForReview() {
-        // A second hide with nothing restored in between would overwrite the first record with an
-        // empty one — the windows are no longer visible, so they would drop out of the filter and
-        // never be reopened. The first record stands until restore() clears it.
-        if (myState.hiddenByReview.isNotEmpty()) return
+        // A leftover record means a previous restore could not resolve every id — most likely it ran
+        // before the tool windows were registered. Reclaim it now, when the IDE is fully up, instead
+        // of refusing to hide: an early return here would leave the record latched and silently stop
+        // hiding anything for the rest of the run.
+        //
+        // This also covers the case the early return was written for. A second hide with nothing
+        // restored in between would otherwise overwrite the first record with an empty one — the
+        // windows are already hidden, so they drop out of the filter below and would never be
+        // reopened. Restoring first puts them back in it.
+        if (myState.hiddenByReview.isNotEmpty()) restore()
+
         val manager = ToolWindowManager.getInstance(project)
         val hidden = MANAGED_IDS.filter { manager.getToolWindow(it)?.isVisible == true }
         // Recorded before the windows are hidden: if hiding threw part-way, the record must already
