@@ -1,12 +1,16 @@
 package dev.tweety.reviewqueue.queue
 
 import com.intellij.dvcs.repo.VcsRepositoryManager
+import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.vcs.ProjectLevelVcsManager
 import com.intellij.openapi.vcs.VcsDirectoryMapping
 import com.intellij.openapi.vfs.LocalFileSystem
+import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.testFramework.HeavyPlatformTestCase
 import com.intellij.testFramework.PlatformTestUtil
+import dev.tweety.reviewqueue.model.ReviewKey
 import dev.tweety.reviewqueue.model.ReviewScope
+import dev.tweety.reviewqueue.ui.ReviewDiffPresenter
 import kotlinx.coroutines.runBlocking
 import java.io.File
 import java.util.concurrent.atomic.AtomicInteger
@@ -85,9 +89,18 @@ class ReviewMarkRetentionTest : HeavyPlatformTestCase() {
             service.snapshot().items.map { it.key.relPath }.sorted(),
         )
 
-        // 2. Mark both reviewed through the service, exactly as the toolbar action does.
-        service.markCurrentReviewed()
-        service.markCurrentReviewed()
+        // 2. Mark both reviewed through a guided session pass, exactly as the diff toolbar does.
+        val sessionService = ReviewSessionService.getInstance(project)
+        sessionService.presenter = object : ReviewDiffPresenter {
+            override fun show(key: ReviewKey, position: Int, total: Int, actions: List<AnAction>) = true
+            override fun close() = Unit
+            override fun isShowing(file: VirtualFile) = false
+        }
+        sessionService.start()
+        assertTrue("session should be running with files to review", sessionService.isActive)
+        while (sessionService.isActive) {
+            sessionService.markCurrent()
+        }
         assertEquals(2, service.snapshot().reviewedCount)
 
         // 3. A rebuild whose queue contains neither file.

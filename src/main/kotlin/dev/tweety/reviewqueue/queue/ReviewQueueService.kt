@@ -11,7 +11,6 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.vcs.changes.Change
 import com.intellij.openapi.vcs.changes.ChangeListListener
 import com.intellij.util.concurrency.AppExecutorUtil
-import dev.tweety.reviewqueue.core.ReviewCursor
 import dev.tweety.reviewqueue.core.ReviewOrdering
 import dev.tweety.reviewqueue.git.ChangeMapper
 import dev.tweety.reviewqueue.git.GitReviewSource
@@ -27,7 +26,6 @@ import java.util.concurrent.atomic.AtomicLong
 
 data class QueueSnapshot(
     val items: List<ReviewItem>,
-    val cursor: Int?,
     val reviewedCount: Int,
     val errors: Map<String, String>,
     val scope: ReviewScope,
@@ -80,7 +78,7 @@ object QueueAssembler {
 }
 
 /**
- * Owns the active scope, the ordered queue and the cursor, and rebuilds on VCS change events so
+ * Owns the active scope and the ordered queue, and rebuilds on VCS change events so
  * a fix round that rewrites files returns exactly those files to the unreviewed set.
  *
  * The rebuild itself (git queries plus a content hash per file) runs on a background thread; only
@@ -106,7 +104,6 @@ class ReviewQueueService(private val project: Project) : Disposable {
     private var errors: Map<String, String> = emptyMap()
     private var changesByKey: Map<ReviewKey, Change> = emptyMap()
     private var keysByChange: Map<Change, ReviewKey> = emptyMap()
-    private var cursor: Int? = null
 
     private data class Rebuild(
         val scope: ReviewScope,
@@ -123,7 +120,7 @@ class ReviewQueueService(private val project: Project) : Disposable {
 
     /** Cheap and EDT-safe: reads already-computed state, spawns no processes. */
     fun snapshot(): QueueSnapshot =
-        QueueSnapshot(items, cursor, state.reviewedCount(items), errors, scope)
+        QueueSnapshot(items, state.reviewedCount(items), errors, scope)
 
     fun setScope(scope: ReviewScope) {
         this.scope = scope
@@ -174,31 +171,15 @@ class ReviewQueueService(private val project: Project) : Disposable {
         // A scope change raced this rebuild; the refresh for the new scope is already in flight.
         if (rebuild.scope != scope) return
 
-        val previousKey = cursor?.let { items.getOrNull(it)?.key }
-        val previousIndex = cursor ?: 0
-
         items = rebuild.assembled.items
         errors = rebuild.assembled.errors
         changesByKey = rebuild.assembled.changesByKey
         keysByChange = rebuild.assembled.keysByChange
 
-        cursor = ReviewCursor.relocate(items, previousKey, previousIndex)
-            ?: ReviewCursor.firstUnreviewed(items) { state.isReviewed(it) }
-        if (previousKey == null) {
-            cursor = ReviewCursor.firstUnreviewed(items) { state.isReviewed(it) } ?: cursor
-        }
         fireChanged()
     }
 
-    fun markCurrentReviewed() {
-        val index = cursor ?: return
-        val item = items.getOrNull(index) ?: return
-        state.markReviewed(item)
-        cursor = ReviewCursor.nextUnreviewed(items, index) { state.isReviewed(it) } ?: index
-        fireChanged()
-    }
-
-    /** Toggles the stored mark for [key]. Deliberately does not move the cursor. */
+    /** Toggles the stored mark for [key]. */
     fun toggleReviewed(key: ReviewKey) {
         val item = items.firstOrNull { it.key == key } ?: return
         if (state.isReviewed(item)) state.unmark(key) else state.markReviewed(item)
@@ -212,21 +193,8 @@ class ReviewQueueService(private val project: Project) : Disposable {
         fireChanged()
     }
 
-    /**
-     * Moves the cursor to [key]. A no-op when the cursor is already there — otherwise the tree's
-     * selection listener and the tree refresh that follows `fireChanged()` feed each other.
-     */
-    fun selectByKey(key: ReviewKey) {
-        val index = items.indexOfFirst { it.key == key }
-        if (index >= 0 && index != cursor) {
-            cursor = index
-            fireChanged()
-        }
-    }
-
     fun resetAll() {
         state.resetAll()
-        cursor = ReviewCursor.firstUnreviewed(items) { state.isReviewed(it) }
         fireChanged()
     }
 
