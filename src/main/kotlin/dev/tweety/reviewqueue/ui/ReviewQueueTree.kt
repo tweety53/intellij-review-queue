@@ -1,6 +1,5 @@
 package dev.tweety.reviewqueue.ui
 
-import com.intellij.openapi.diagnostic.thisLogger
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vcs.changes.Change
 import com.intellij.openapi.vcs.changes.ui.ChangeNodeDecorator
@@ -10,14 +9,12 @@ import com.intellij.openapi.vcs.changes.ui.ChangesTree
 import com.intellij.openapi.vcs.changes.ui.TreeModelBuilder
 import com.intellij.ui.SimpleColoredComponent
 import com.intellij.ui.SimpleTextAttributes
-import com.intellij.util.ui.tree.TreeUtil
 import dev.tweety.reviewqueue.model.ReviewKey
 import dev.tweety.reviewqueue.queue.QueueSnapshot
 import dev.tweety.reviewqueue.queue.ReviewQueueService
 import java.awt.event.MouseAdapter
 import java.awt.event.MouseEvent
 import javax.swing.tree.DefaultTreeModel
-import javax.swing.tree.TreeNode
 
 /**
  * The queue as a platform changes tree: repo grouping, path shortening and file icons come from
@@ -35,7 +32,6 @@ class ReviewQueueTree(
 ) : ChangesTree(project, false, false) {
 
     private var reviewedKeys: Set<String> = emptySet()
-    private var refreshing = false
     private var activationHandler: ((ReviewKey) -> Unit)? = null
 
     init {
@@ -63,37 +59,20 @@ class ReviewQueueTree(
         activationHandler = handler
     }
 
-    /**
-     * True while this tree is rewriting its own model and selection. Selection events raised in
-     * that window are the tree talking to itself, not the user, and must not be fed back into the
-     * service: `ChangesTree` fires `valueChanged` synchronously, so without this guard
-     * service -> refreshFrom -> selection -> service recurses until the EDT stack overflows.
-     */
-    val isProgrammaticUpdate: Boolean
-        get() = refreshing || isModelUpdateInProgress
-
     override fun rebuildTree() {
         refreshFrom(service.snapshot())
     }
 
     fun refreshFrom(snapshot: QueueSnapshot) {
-        refreshing = true
-        try {
-            reviewedKeys = snapshot.items
-                .filter { service.isReviewed(it) }
-                .mapTo(mutableSetOf()) { it.key.storageKey() }
+        reviewedKeys = snapshot.items
+            .filter { service.isReviewed(it) }
+            .mapTo(mutableSetOf()) { it.key.storageKey() }
 
-            val changes: List<Change> = snapshot.items.mapNotNull { service.changeFor(it.key) }
-            val model: DefaultTreeModel = TreeModelBuilder(project, grouping)
-                .setChanges(changes, ReviewedDecorator())
-                .build()
-            updateTreeModel(model)
-
-            val cursorKey = snapshot.cursor?.let { snapshot.items.getOrNull(it)?.key }
-            if (cursorKey != null) selectKey(cursorKey)
-        } finally {
-            refreshing = false
-        }
+        val changes: List<Change> = snapshot.items.mapNotNull { service.changeFor(it.key) }
+        val model: DefaultTreeModel = TreeModelBuilder(project, grouping)
+            .setChanges(changes, ReviewedDecorator())
+            .build()
+        updateTreeModel(model)
     }
 
     /**
@@ -113,19 +92,6 @@ class ReviewQueueTree(
     private fun fireActivated() {
         val handler = activationHandler ?: return
         selectedKey()?.let(handler)
-    }
-
-    private fun selectKey(key: ReviewKey) {
-        val root = model.root as? TreeNode ?: return
-        val match = TreeUtil.treeNodeTraverser(root)
-            .traverse()
-            .filter(ChangesBrowserNode::class.java)
-            .find { node -> (node.userObject as? Change)?.let { keyFor(it) } == key }
-        if (match == null) {
-            thisLogger().warn("Review queue: no tree node for cursor key ${key.storageKey()}")
-            return
-        }
-        TreeUtil.selectNode(this, match)
     }
 
     /** Appends the reviewed marker; everything else about the row is the platform's rendering. */
