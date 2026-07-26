@@ -31,6 +31,18 @@ data class ReviewSession(val keys: List<ReviewKey>, val index: Int) {
     fun back(): ReviewSession = if (index <= 0) this else copy(index = index - 1)
 
     /**
+     * Moves the cursor to [key], or returns null when it is not part of this pass.
+     *
+     * Refusing rather than appending is what keeps the fixed-list invariant: the file list can
+     * offer every file in scope, and a pick outside the pass falls back to a browsing diff instead
+     * of silently reshuffling what the reviewer is walking through.
+     */
+    fun jumpTo(key: ReviewKey): ReviewSession? {
+        val target = keys.indexOf(key)
+        return if (target < 0) null else copy(index = target)
+    }
+
+    /**
      * Moves forward to the first file at or after the cursor that is still in [live], or returns
      * null when none remain. Without this, a file removed from the queue mid-pass would leave the
      * session pointing at something that can never be displayed or marked.

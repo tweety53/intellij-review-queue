@@ -1,13 +1,22 @@
 package dev.tweety.reviewqueue.queue
 
 import com.intellij.dvcs.repo.VcsRepositoryManager
+import com.intellij.openapi.actionSystem.ActionManager
 import com.intellij.openapi.actionSystem.AnAction
+import com.intellij.openapi.actionSystem.AnActionEvent
+import com.intellij.openapi.actionSystem.RightAlignedToolbarAction
+import com.intellij.openapi.actionSystem.Separator
 import com.intellij.openapi.vcs.ProjectLevelVcsManager
 import com.intellij.openapi.vcs.VcsDirectoryMapping
 import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.testFramework.HeavyPlatformTestCase
 import com.intellij.testFramework.PlatformTestUtil
+import dev.tweety.reviewqueue.actions.EndReviewAction
+import dev.tweety.reviewqueue.actions.diff.DiffEndReviewAction
+import dev.tweety.reviewqueue.actions.diff.DiffRefreshQueueAction
+import dev.tweety.reviewqueue.actions.diff.DiffResetAllAction
+import dev.tweety.reviewqueue.actions.diff.DiffStartReviewAction
 import dev.tweety.reviewqueue.model.ReviewKey
 import dev.tweety.reviewqueue.model.ReviewScope
 import dev.tweety.reviewqueue.ui.ReviewDiffPresenter
@@ -105,6 +114,129 @@ class ReviewSessionServiceTest : HeavyPlatformTestCase() {
         }
         fail("timed out waiting for a two-file Staged queue; got ${queue.snapshot().items.map { it.key.relPath }}")
         error("unreachable")
+    }
+
+    fun testTheDiffToolbarSplitsNavigationFromRightAlignedSessionControls() {
+        val actions = ReviewSessionService.getInstance(project).diffActions
+        val manager = ActionManager.getInstance()
+
+        val navigation = actions.filterNot { it is RightAlignedToolbarAction || it is Separator }
+        val sessionControls = actions.filterIsInstance<RightAlignedToolbarAction>()
+
+        assertEquals(
+            "navigation actions must be resolved by id, or their tooltips lose the shortcut",
+            listOf(
+                manager.getAction("ReviewQueue.ShowFileList"),
+                manager.getAction("ReviewQueue.PreviousFile"),
+                manager.getAction("ReviewQueue.MarkReviewed"),
+                manager.getAction("ReviewQueue.ToggleReviewed"),
+            ),
+            navigation,
+        )
+        assertEquals(
+            listOf(
+                DiffStartReviewAction::class.java,
+                DiffEndReviewAction::class.java,
+                DiffRefreshQueueAction::class.java,
+                DiffResetAllAction::class.java,
+            ),
+            sessionControls.map { it.javaClass },
+        )
+        // The marker interface no longer flush-aligns anything in this toolbar's layout (see
+        // ReviewSessionService.diffActions); this separator is the entire visual grouping mechanism
+        // now, so it earns its own pinned assertion rather than riding along inside the partition.
+        assertEquals(
+            "a separator must sit between the navigation group and the session controls",
+            navigation.size,
+            actions.indexOfFirst { it is Separator },
+        )
+    }
+
+    fun testTheFileListActionIsRegistered() {
+        assertNotNull(
+            "an unregistered id resolves to null and listOfNotNull drops it silently",
+            ActionManager.getInstance().getAction("ReviewQueue.ShowFileList"),
+        )
+    }
+
+    /** Two End buttons, one confirming and one not, is a trap: muscle memory fires the wrong one. */
+    fun testEndReviewAppearsExactlyOnceOnTheDiffToolbar() {
+        val ends = ReviewSessionService.getInstance(project).diffActions
+            .filter { it is EndReviewAction }
+        assertEquals("End Review must appear once, as the confirming variant", 1, ends.size)
+        assertTrue(ends.single() is DiffEndReviewAction)
+    }
+
+    /** Overriding actionPerformed here would stack a second dialog on the parent's own. */
+    fun testResetAllIsNotDoubleConfirmed() {
+        try {
+            DiffResetAllAction::class.java.getDeclaredMethod("actionPerformed", AnActionEvent::class.java)
+            fail("DiffResetAllAction must not override actionPerformed; ResetAllAction already confirms")
+        } catch (expected: NoSuchMethodException) {
+            // The marker interface is the whole of this subclass.
+        }
+    }
+
+    fun testJumpToShowsAnotherFileInTheSamePass() {
+        val queue = stagedQueueOfTwoFiles()
+        val keys = queue.snapshot().items.map { it.key }
+        val service = ReviewSessionService.getInstance(project)
+        val presenter = FakePresenter()
+        service.presenter = presenter
+
+        service.start()
+        assertEquals(keys[0], service.currentKey())
+
+        assertTrue("a key in the pass must be accepted", service.jumpTo(keys[1]))
+
+        assertEquals(keys[1], service.currentKey())
+        assertEquals(listOf(keys[0], keys[1]), presenter.shown)
+    }
+
+    fun testJumpToAFileOutsideThePassIsRefusedAndChangesNothing() {
+        val queue = stagedQueueOfTwoFiles()
+        val keys = queue.snapshot().items.map { it.key }
+        val service = ReviewSessionService.getInstance(project)
+        val presenter = FakePresenter()
+        service.presenter = presenter
+
+        service.start()
+
+        assertFalse(
+            "refusing is what lets the caller fall back to a browsing diff",
+            service.jumpTo(ReviewKey("/nowhere", "absent.txt")),
+        )
+        assertEquals(keys[0], service.currentKey())
+        assertEquals(listOf(keys[0]), presenter.shown)
+    }
+
+    fun testJumpToWithNoSessionIsRefused() {
+        val service = ReviewSessionService.getInstance(project)
+        service.presenter = FakePresenter()
+        assertFalse(service.jumpTo(ReviewKey("/repo", "a.txt")))
+    }
+
+    fun testJumpToReturnsFalseWhenTheJumpEndsThePass() {
+        val queue = stagedQueueOfTwoFiles()
+        val keys = queue.snapshot().items.map { it.key }
+        val service = ReviewSessionService.getInstance(project)
+        service.presenter = FakePresenter()
+
+        service.start()
+        assertTrue("start must succeed", service.isActive)
+        assertEquals(keys[0], service.currentKey())
+
+        // Swap to a presenter that rejects everything.
+        service.presenter = object : FakePresenter() {
+            override fun canShow(key: ReviewKey) = false
+        }
+
+        assertFalse(
+            "a jump that ends the pass must return false",
+            service.jumpTo(keys[1]),
+        )
+        assertFalse("the pass must be closed", service.isActive)
+        assertNull("no file is current", service.currentKey())
     }
 
     private fun git(dir: File, vararg args: String) {

@@ -44,6 +44,10 @@
                     description="Clear every reviewed mark in this project"/>
         </group>
 
+        <action id="ReviewQueue.ShowFileList"
+                class="dev.tweety.reviewqueue.actions.ShowFileListAction"
+                text="Show File List"
+                description="List every file in the review scope with its reviewed state"/>
         <action id="ReviewQueue.PreviousFile"
                 class="dev.tweety.reviewqueue.actions.PreviousFileAction"
                 text="Previous File"
@@ -52,7 +56,8 @@
                 class="dev.tweety.reviewqueue.actions.MarkReviewedAction"
                 text="Mark Reviewed"
                 description="Mark this file reviewed and open the next one">
-            <keyboard-shortcut keymap="$default" first-keystroke="ctrl shift SPACE"/>
+            <keyboard-shortcut keymap="$default" first-keystroke="ctrl alt shift SPACE"/>
+            <keyboard-shortcut keymap="Mac OS X 10.5+" first-keystroke="meta shift SPACE" replace-all="true"/>
         </action>
         <action id="ReviewQueue.ToggleReviewed"
                 class="dev.tweety.reviewqueue.actions.ToggleReviewedAction"

@@ -3,6 +3,7 @@ package dev.tweety.reviewqueue.queue
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.actionSystem.ActionManager
 import com.intellij.openapi.actionSystem.AnAction
+import com.intellij.openapi.actionSystem.Separator
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
 import com.intellij.openapi.diagnostic.thisLogger
@@ -10,6 +11,10 @@ import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.fileEditor.FileEditorManagerListener
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFile
+import dev.tweety.reviewqueue.actions.diff.DiffEndReviewAction
+import dev.tweety.reviewqueue.actions.diff.DiffRefreshQueueAction
+import dev.tweety.reviewqueue.actions.diff.DiffResetAllAction
+import dev.tweety.reviewqueue.actions.diff.DiffStartReviewAction
 import dev.tweety.reviewqueue.core.ReviewSession
 import dev.tweety.reviewqueue.model.ReviewKey
 import dev.tweety.reviewqueue.ui.EditorTabDiffPresenter
@@ -34,17 +39,40 @@ class ReviewSessionService(private val project: Project) : Disposable {
     private var session: ReviewSession? = null
 
     /**
-     * Resolved here rather than handed in by the tool window: Start Review is reachable from Find
-     * Action without the panel ever being constructed, and a guided diff with no toolbar buttons
-     * strands the user with only the keyboard shortcut and a tab close as the way out.
+     * The diff viewer's toolbar, in two groups: per-file navigation on the left, then a separator,
+     * then the session and queue controls.
+     *
+     * The `RightAlignedToolbarAction` marker is still applied to the four session controls, but it
+     * does not push them to the toolbar's right edge here: `DiffHeaderToolbarUtil.createLayoutPanel`
+     * lays this toolbar out with `align(AlignX.LEFT).resizableColumn()`, which anchors the whole
+     * component at its preferred width on the left, so there is no right edge to align against
+     * inside it. The marker is kept anyway — it is harmless, documents the intended grouping, and
+     * would take effect unchanged if the surrounding layout ever gave the toolbar room to flush
+     * against. Until then, the `Separator` below is what actually draws the boundary between the
+     * two groups.
+     *
+     * The navigation actions are resolved by id, because that is what makes the button tooltip
+     * carry the keyboard shortcut, and because Start Review is reachable from Find Action without
+     * the tool window ever being constructed — a guided diff with no toolbar buttons strands the
+     * user with only a tab close as the way out.
+     *
+     * The four session controls are constructed directly instead. Registering the confirming
+     * variants in plugin.xml would list them in Find Action beside the originals: eight entries for
+     * four commands, half of them confirming and half not.
      */
-    private val diffActions: List<AnAction> by lazy {
+    internal val diffActions: List<AnAction> by lazy {
         val manager = ActionManager.getInstance()
         listOfNotNull(
+            manager.getAction("ReviewQueue.ShowFileList"),
             manager.getAction("ReviewQueue.PreviousFile"),
             manager.getAction("ReviewQueue.MarkReviewed"),
             manager.getAction("ReviewQueue.ToggleReviewed"),
-            manager.getAction("ReviewQueue.EndReview"),
+        ) + listOf(
+            Separator.getInstance(),
+            DiffStartReviewAction(),
+            DiffEndReviewAction(),
+            DiffRefreshQueueAction(),
+            DiffResetAllAction(),
         )
     }
 
@@ -112,6 +140,24 @@ class ReviewSessionService(private val project: Project) : Disposable {
         if (active.isAtFirst) return
         session = active.back()
         showCurrent()
+    }
+
+    /**
+     * Moves the pass to [key] and shows it. Returns false when there is no session, [key] is not
+     * part of it, or the jump ends the pass because nothing at or after the target is still
+     * showable, so the caller can open it as a browsing diff instead. In every `true` case, a file
+     * is on screen.
+     *
+     * Goes through [showCurrent] like every other move, so a jump to a file that has since left the
+     * queue settles forward onto the next live one rather than failing — the same behaviour marking
+     * already has.
+     */
+    fun jumpTo(key: ReviewKey): Boolean {
+        val moved = session?.jumpTo(key) ?: return false
+        session = moved
+        showCurrent()
+        // showCurrent() ends the pass when nothing at or after the target is still showable.
+        return session != null
     }
 
     /** Ends the pass, restoring the layout. Every mark made so far is kept. */
