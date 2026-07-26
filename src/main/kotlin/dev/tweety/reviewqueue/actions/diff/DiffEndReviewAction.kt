@@ -7,11 +7,15 @@ import dev.tweety.reviewqueue.actions.EndReviewAction
 import dev.tweety.reviewqueue.actions.confirmed
 
 /**
- * End Review on the diff toolbar, right-aligned and confirming.
+ * End Review on the diff toolbar, grouped at the end of the toolbar behind a separator, and
+ * confirming.
  *
  * The only End Review on this toolbar. An unconfirmed twin alongside it would be a trap: the
  * buttons sit directly above the code being read, and muscle memory built on one would fire the
  * other.
+ *
+ * See `DiffStartReviewAction`'s KDoc for why `RightAlignedToolbarAction` is implemented here without
+ * actually right-aligning anything.
  */
 class DiffEndReviewAction : EndReviewAction(), RightAlignedToolbarAction {
     override fun actionPerformed(e: AnActionEvent) {

@@ -7,7 +7,7 @@ import dev.tweety.reviewqueue.actions.RefreshQueueAction
 import dev.tweety.reviewqueue.actions.confirmed
 
 /**
- * Refresh on the diff toolbar, right-aligned and confirming.
+ * Refresh on the diff toolbar, grouped at the end of the toolbar behind a separator, and confirming.
  *
  * Confirmed here but not in the tool window, and deliberately so. `ReviewSessionService` does not
  * subscribe to the queue and never re-settles on its own, so a refresh does not move the cursor out
@@ -16,6 +16,9 @@ import dev.tweety.reviewqueue.actions.confirmed
  * "left the queue" branch, far from the click that caused it. That disruption, one click away in the
  * middle of a pass, is enough to justify asking first. In the tool window there is no pass to
  * disrupt, so it stays a cheap re-read of a list.
+ *
+ * See `DiffStartReviewAction`'s KDoc for why `RightAlignedToolbarAction` is implemented here without
+ * actually right-aligning anything.
  */
 class DiffRefreshQueueAction : RefreshQueueAction(), RightAlignedToolbarAction {
     override fun actionPerformed(e: AnActionEvent) {
