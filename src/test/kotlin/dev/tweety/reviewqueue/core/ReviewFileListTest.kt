@@ -21,6 +21,14 @@ class ReviewFileListTest {
     }
 
     @Test
+    fun `rows do not sort input that arrives out of order`() {
+        val unordered = listOf(item("/repo", "z.kt"), item("/repo", "a.kt"))
+        val rows = ReviewFileList.rows(unordered, reviewed = { false }, current = null)
+        assertEquals(listOf("z.kt", "a.kt"), rows.map { it.label })
+        assertEquals(unordered.map { it.key }, rows.map { it.key })
+    }
+
+    @Test
     fun `a single root needs no prefix`() {
         val rows = ReviewFileList.rows(single, reviewed = { false }, current = null)
         assertEquals("src/b.kt", rows[1].label)
@@ -55,5 +63,11 @@ class ReviewFileListTest {
     @Test
     fun `an empty queue yields no rows`() {
         assertEquals(emptyList<ReviewFileRow>(), ReviewFileList.rows(emptyList(), { false }, null))
+    }
+
+    @Test
+    fun `no row is current when current key is absent from items`() {
+        val rows = ReviewFileList.rows(single, reviewed = { false }, current = ReviewKey("/repo", "missing.kt"))
+        assertTrue(rows.none { it.isCurrent })
     }
 }
