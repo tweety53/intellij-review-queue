@@ -130,6 +130,21 @@ class ReviewSessionService(private val project: Project) : Disposable {
         showCurrent()
     }
 
+    /**
+     * Moves the pass to [key] and shows it. Returns false when there is no session or [key] is not
+     * part of it, so the caller can open it as a browsing diff instead.
+     *
+     * Goes through [showCurrent] like every other move, so a jump to a file that has since left the
+     * queue settles forward onto the next live one rather than failing — the same behaviour marking
+     * already has.
+     */
+    fun jumpTo(key: ReviewKey): Boolean {
+        val moved = session?.jumpTo(key) ?: return false
+        session = moved
+        showCurrent()
+        return true
+    }
+
     /** Ends the pass, restoring the layout. Every mark made so far is kept. */
     fun end() {
         session = null

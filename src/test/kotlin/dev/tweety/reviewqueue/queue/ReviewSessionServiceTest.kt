@@ -160,6 +160,45 @@ class ReviewSessionServiceTest : HeavyPlatformTestCase() {
         }
     }
 
+    fun testJumpToShowsAnotherFileInTheSamePass() {
+        val queue = stagedQueueOfTwoFiles()
+        val keys = queue.snapshot().items.map { it.key }
+        val service = ReviewSessionService.getInstance(project)
+        val presenter = FakePresenter()
+        service.presenter = presenter
+
+        service.start()
+        assertEquals(keys[0], service.currentKey())
+
+        assertTrue("a key in the pass must be accepted", service.jumpTo(keys[1]))
+
+        assertEquals(keys[1], service.currentKey())
+        assertEquals(listOf(keys[0], keys[1]), presenter.shown)
+    }
+
+    fun testJumpToAFileOutsideThePassIsRefusedAndChangesNothing() {
+        val queue = stagedQueueOfTwoFiles()
+        val keys = queue.snapshot().items.map { it.key }
+        val service = ReviewSessionService.getInstance(project)
+        val presenter = FakePresenter()
+        service.presenter = presenter
+
+        service.start()
+
+        assertFalse(
+            "refusing is what lets the caller fall back to a browsing diff",
+            service.jumpTo(ReviewKey("/nowhere", "absent.txt")),
+        )
+        assertEquals(keys[0], service.currentKey())
+        assertEquals(listOf(keys[0]), presenter.shown)
+    }
+
+    fun testJumpToWithNoSessionIsRefused() {
+        val service = ReviewSessionService.getInstance(project)
+        service.presenter = FakePresenter()
+        assertFalse(service.jumpTo(ReviewKey("/repo", "a.txt")))
+    }
+
     private fun git(dir: File, vararg args: String) {
         val process = ProcessBuilder(listOf("git", *args))
             .directory(dir)

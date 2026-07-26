@@ -74,4 +74,32 @@ class ReviewSessionTest {
         val session = ReviewSession(keys, 1)
         assertNull(session.settleOn(setOf(key("a.kt"))))
     }
+
+    @Test
+    fun `jumpTo moves the cursor to a file in the pass`() {
+        val session = ReviewSession.start(keys)!!
+        val jumped = session.jumpTo(key("c.kt"))!!
+        assertEquals(key("c.kt"), jumped.current)
+        assertEquals(3, jumped.position)
+        assertEquals("the pass itself must not change", keys, jumped.keys)
+    }
+
+    @Test
+    fun `jumpTo can move backwards`() {
+        val third = ReviewSession(keys, 2)
+        assertEquals(key("a.kt"), third.jumpTo(key("a.kt"))!!.current)
+    }
+
+    /** The pass is fixed when it starts. A jump moves the cursor; it never grows the list. */
+    @Test
+    fun `jumpTo a file outside the pass yields null`() {
+        val session = ReviewSession.start(keys)!!
+        assertNull(session.jumpTo(key("elsewhere.kt")))
+    }
+
+    @Test
+    fun `jumpTo the current file leaves the session where it is`() {
+        val second = ReviewSession(keys, 1)
+        assertEquals(second, second.jumpTo(key("b.kt")))
+    }
 }
