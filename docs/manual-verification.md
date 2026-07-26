@@ -314,16 +314,20 @@ happen in the diff viewer once a review is running. This section checks that flo
      from there, in order — the round trip did not skip or duplicate a file.
 
 5. **The Mark Reviewed shortcut marks and advances in the review diff.**
-   - During a review, place focus in the diff viewer. Press Alt+Shift+V (⌥⇧V on macOS).
-     **Expected:** it marks the file reviewed and advances, same as clicking Mark Reviewed.
+   - During a review, place focus in the diff viewer. Press Cmd+Shift+Enter on macOS, or
+     Ctrl+Shift+Enter on Windows/Linux. **Expected:** it marks the file reviewed and advances, same
+     as clicking Mark Reviewed.
    - Now the case that matters: **leave the review running.** Do not click End Review. With the
      session still active, open a normal source file in another editor tab (Cmd+Shift+N / double
      click a file in the Recent Files popup — the Project tool window is hidden), click into that
-     editor so it has focus, and press Alt+Shift+V.
-   - **Expected:** it does **nothing at all** — no "Choose action" popup, no ambiguity, no silent
-     advance through the review. That is the `DIFF_CONTEXT` gate doing its job.
+     editor so it has focus, and press the same chord.
+   - **Expected:** it does **nothing at all** — no "Choose action" popup, no silent advance through
+     the review. That is the `DIFF_CONTEXT` gate doing its job. On Windows/Linux, Complete Current
+     Statement should fire there instead, normally: it shares Ctrl+Shift+Enter, and the gate is what
+     keeps the two from competing.
    - **To verify the binding registered**, open Settings → Keymap, search for "Mark Reviewed", and
-     confirm it shows Alt+Shift+V with no conflict warning.
+     confirm it shows the chord for your platform. On Windows/Linux a conflict warning against
+     Complete Current Statement is expected and accepted; on macOS there should be none.
 
    **If the shortcut does nothing but the toolbar button works**, the action and its gate are fine
    and the chord itself is being eaten before the IDE sees it. Do not start by suspecting the plugin.
@@ -483,9 +487,9 @@ the code — only from having done it in the IDE):
 - [ ] 20b. Hidden layout survives quitting and reopening the IDE mid-session
 - [ ] 20c. Closing the review diff tab by hand ends the session and restores the layout
 - [ ] 20d. Mis-mark recovery: Mark Reviewed → Previous File → Toggle Reviewed → Mark Reviewed
-- [ ] 20e. Alt+Shift+V (⌥⇧V) marks and advances in the review diff, and **while the session is
-      still running** does nothing at all in a normal editor (no mark, no ambiguity popup).
-      Confirm in Settings → Keymap that Mark Reviewed shows Alt+Shift+V with no conflict warning.
+- [ ] 20e. Cmd+Shift+Enter (Ctrl+Shift+Enter on Windows/Linux) marks and advances in the review
+      diff, and **while the session is still running** does nothing at all in a normal editor.
+      Confirm in Settings → Keymap that Mark Reviewed shows the chord for your platform.
       If the chord does nothing while the toolbar button works, follow the diagnosis note in
       section 5 — the chord is being eaten below the IDE, not by the plugin.
 - [ ] 20f. Start Review after a fix round walks only the changed file(s)

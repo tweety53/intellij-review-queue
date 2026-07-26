@@ -57,11 +57,15 @@
                 text="Mark Reviewed"
                 description="Mark this file reviewed and open the next one">
             <!--
-              One declaration on $default, inherited by every other keymap including macOS.
-              Deliberately not a per-keymap chord: see MarkReviewedShortcutTest for why SPACE and
-              keymap-name targeting are both off the table.
+              Cmd+Shift+Enter on macOS, Ctrl+Shift+Enter elsewhere. replace-all stops macOS
+              inheriting the $default chord, which is EditorCompleteStatement there.
+
+              Never bind this to the space bar: Ctrl+Shift+Space is SmartTypeCompletion, and macOS
+              consumes the whole Cmd+Space family for input-source switching before the IDE sees the
+              key. MarkReviewedShortcutTest pins both lessons and the one collision we accept.
             -->
-            <keyboard-shortcut keymap="$default" first-keystroke="alt shift V"/>
+            <keyboard-shortcut keymap="$default" first-keystroke="control shift ENTER"/>
+            <keyboard-shortcut keymap="Mac OS X 10.5+" first-keystroke="meta shift ENTER" replace-all="true"/>
         </action>
         <action id="ReviewQueue.ToggleReviewed"
                 class="dev.tweety.reviewqueue.actions.ToggleReviewedAction"

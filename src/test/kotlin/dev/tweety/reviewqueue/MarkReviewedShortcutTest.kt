@@ -31,20 +31,36 @@ class MarkReviewedShortcutTest {
             ?.value
             ?: error("no keyboard-shortcut in:\n$markReviewedBlock")
 
+    private val macShortcut: String =
+        Regex("""<keyboard-shortcut keymap="Mac OS X 10\.5\+"[^/]*/>""")
+            .find(markReviewedBlock)
+            ?.value
+            ?: error("no macOS keyboard-shortcut in:\n$markReviewedBlock")
+
     @Test
-    fun `one declaration on the default keymap, which every other keymap inherits`() {
-        assertEquals(
-            "targeting a keymap by name is what silently dropped the binding before; a single " +
-                "\$default entry is inherited by the macOS keymap and needs no name to match",
-            1,
-            Regex("<keyboard-shortcut").findAll(markReviewedBlock).count(),
-        )
+    fun `two declarations, one per platform`() {
+        assertEquals(2, Regex("<keyboard-shortcut").findAll(markReviewedBlock).count())
         assertTrue(shortcut, shortcut.contains("""keymap="${'$'}default""""))
     }
 
     @Test
-    fun `the chord is alt shift V`() {
-        assertTrue(shortcut, shortcut.contains("""first-keystroke="alt shift V""""))
+    fun `windows and linux get ctrl shift ENTER`() {
+        assertTrue(shortcut, shortcut.contains("""first-keystroke="control shift ENTER""""))
+    }
+
+    /**
+     * Cmd+Shift+Enter, verified free in both bundled keymaps and in every plugin bundled with
+     * 2026.2. `replace-all` is what stops macOS also inheriting the `$default` chord, which is a
+     * bundled action there (see [the collision test][ctrlShiftEnterShadowsCompleteCurrentStatement]).
+     */
+    @Test
+    fun `macOS gets cmd shift ENTER and does not inherit the default chord`() {
+        assertTrue(macShortcut, macShortcut.contains("""first-keystroke="meta shift ENTER""""))
+        assertTrue(
+            "without replace-all macOS would also answer to the \$default chord, which is " +
+                "EditorCompleteStatement there",
+            macShortcut.contains("""replace-all="true""""),
+        )
     }
 
     /**
@@ -54,24 +70,33 @@ class MarkReviewedShortcutTest {
      */
     @Test
     fun `no binding uses the space key`() {
-        // Scoped to the binding, not the whole action block: the block carries a comment that names
+        // Scoped to the bindings, not the whole action block: the block carries a comment that names
         // SPACE to explain why it is avoided, and that comment must not fail this test.
         assertFalse(
             "SPACE chords have failed twice: SmartTypeCompletion, then macOS input-source switching",
-            shortcut.contains("SPACE"),
+            shortcut.contains("SPACE") || macShortcut.contains("SPACE"),
         )
     }
 
+    /**
+     * Documents a known, accepted collision rather than pretending it is absent.
+     *
+     * `control shift ENTER` is `EditorCompleteStatement` in `keymaps/$default.xml`, and the macOS
+     * keymap does not redeclare that action — so Complete Current Statement answers to
+     * Ctrl+Shift+Enter on every platform, macOS included. Mark Reviewed is chosen deliberately
+     * anyway: `MarkReviewedAction.update` enables it only inside the review diff viewer, where the
+     * editors are read-only and Complete Current Statement is disabled, so the two do not compete
+     * for the chord in practice.
+     *
+     * This test exists so the trade is visible. If an ambiguity popup ever appears on Windows or
+     * Linux, this is the reason and the fix is to give `$default` a chord of its own.
+     */
     @Test
-    fun `no keymap-specific targeting and no replace-all`() {
-        assertFalse(
-            "a keymap name the platform does not recognise is ignored without a warning",
-            markReviewedBlock.contains("""keymap="Mac OS X"""),
-        )
-        assertFalse(
-            "replace-all exists only to suppress an inherited chord; with one declaration there is " +
-                "nothing to suppress",
-            markReviewedBlock.contains("replace-all"),
+    fun ctrlShiftEnterShadowsCompleteCurrentStatement() {
+        assertTrue(
+            "the \$default chord is knowingly shared with EditorCompleteStatement; if this changes, " +
+                "revisit the comment on this test",
+            shortcut.contains("""first-keystroke="control shift ENTER""""),
         )
     }
 }
