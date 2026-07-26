@@ -155,7 +155,7 @@ that file's diff when no session is running. During a session the panel is hidde
 | Diff tab closed by hand | A `FileEditorManagerListener` treats it as Exit: layout restores, session ends. Without this the IDE is left with both windows hidden and no obvious way back. |
 | IDE quits mid-session | Session is not persisted; pressing Start again resumes at the first unreviewed file. The persisted layout snapshot is restored on next project open. |
 | A fix round lands mid-session | The session's list stays fixed. A file that has vanished from the queue is skipped when reached. A file whose content changed still marks correctly, because marking stores the *current* hash. Newly added files join the next session, not the running one. |
-| A file the diff viewer cannot render | Excluded from the session list up front by `DiffChainPlanner`. Otherwise the session could never reach its end — the trap the submodule-gitlink case would have sprung. |
+| A file the diff viewer cannot render | Handled reactively, not filtered up front: `ReviewSessionService.showCurrent()` asks the presenter to show each candidate and advances past any that returns false, ending the pass only when nothing showable remains. Equivalent to an up-front filter and simpler — there is no renderability filter in `DiffChainPlanner` to look for. Without the skip loop the session could never reach its end: the trap the submodule-gitlink case would have sprung. |
 | Empty queue | Start Review is disabled. |
 | Per-root git error during a session | Does not disturb the running session, whose list is already fixed. The error surfaces in the panel as today. |
 

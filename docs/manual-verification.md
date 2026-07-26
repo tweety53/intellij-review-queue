@@ -317,11 +317,19 @@ happen in the diff viewer once a review is running. This section checks that flo
    - During a review, place focus in the diff viewer and press
      <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Space</kbd>. **Expected:** it marks the file reviewed and
      advances, same as clicking Mark Reviewed.
-   - End the review (or open any other file outside a review session) and put the cursor inside a
-     method call in a normal source editor. Press <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Space</kbd>.
-   - **Expected:** Smart Type Completion pops up as usual — the plugin's shortcut binding must not
-     shadow the platform default outside a review. If completion does not appear, or something else
-     happens, stop and report it; this is the exact chord IntelliJ ships for Smart Type Completion.
+   - Now the case that matters: **leave the review running.** Do not click End Review. With the
+     session still active, open a normal source file in another editor tab (Cmd+Shift+N / double
+     click a file in the Recent Files popup — the Project tool window is hidden), click into that
+     editor so it has focus, and put the caret inside a method call. Press
+     <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Space</kbd>.
+   - **Expected:** Smart Type Completion pops up, exactly as it would with the plugin uninstalled.
+     **Two specific failures to watch for, both defects — stop and report either:**
+     - a "Choose action" / ambiguity popup offering both Smart Type Completion and Mark Reviewed;
+     - no popup at all, and instead the review silently advances to the next file (check the diff
+       tab title's `Review N/M` and the progress count — a silent mis-mark).
+
+     An active session is the only state in which the plugin's action is even eligible, so testing
+     this chord *after* ending the review proves nothing. It must be tested mid-session.
 
 6. **Start Review after a fix round walks only the changed files.**
    - Finish or end a review with every file marked. Edit and re-stage exactly one of the
@@ -361,6 +369,80 @@ happen in the diff viewer once a review is running. This section checks that flo
      closes. This is the session ending because the queue is complete, not because you clicked End
      Review.
 
+10. **The queue changing mid-session does not silently swallow a mark.**
+    Use a **scratch repo in a temp directory** for this one — it requires staging files. Do not run
+    it against anything under `/Users/tweety53/Projects/gymie*`.
+
+    ```bash
+    R=$(mktemp -d)/scratch && mkdir -p "$R" && cd "$R" && git init
+    git config user.email t@example.com && git config user.name T
+    for f in one two three four; do echo v1 > $f.txt; done
+    git add . && git commit -m base
+    for f in one two three four; do echo v2 >> $f.txt; done
+    git add .
+    ```
+
+    - Open `$R` as an IDE project, confirm the Staged queue lists four files, and click
+      **Start Review**. Mark the first file so you are sitting on **file 2** (`Review 2/4`).
+    - Leave the IDE alone. In a terminal, change **file 3** so it leaves the queue as currently
+      keyed — committing it removes it from the staged diff:
+
+      ```bash
+      cd "$R" && git commit -m "fix round" three.txt
+      ```
+
+    - Wait a couple of seconds for the IDE to notice the VCS change, then click **Mark Reviewed**
+      on file 2 and keep marking forward to the end of the pass.
+    - **Expected:** file 3 either still marks normally, or is visibly skipped — the diff jumps
+      straight from file 2 to file 4 and the tab title reflects it. What must **not** happen is a
+      mark on file 3 that appears to work while the progress count does not move: pressing Mark
+      Reviewed on a file that has left the queue must never store nothing and advance anyway.
+    - Cross-check at the end: the number of files the progress label counts reviewed must equal the
+      number of files you actually saw and marked. If it is short by one, that is the defect —
+      report it, and check `idea.log` for the plugin's warning about a file leaving the queue
+      before it could be marked (section 19 covers reading the log).
+
+11. **Enablement during a session: Previous File at the first file, and Scope.**
+    - Start a review over at least two files. Before clicking anything else, look at **Previous
+      File** on the diff toolbar while sitting on `Review 1/M`.
+    - **Expected:** it is **disabled** (greyed out). If it is clickable, click it and confirm it at
+      least does nothing — but a clickable Previous File on the first file is a defect; report it.
+    - Click **Mark Reviewed** once so you are on `Review 2/M`. **Expected:** Previous File is now
+      enabled, and clicking it steps back to file 1, where it must go back to being disabled.
+    - Still mid-session, reopen the **Review Queue** tool window (View → Tool Windows → Review
+      Queue) and look at the **Scope** dropdown. **Expected:** it is disabled while the review is
+      running, and enabled again after End Review. Changing the scope mid-pass would rebuild the
+      queue underneath the session's fixed file list.
+
+12. **Closing the project mid-session restores the layout too.**
+    A different code path from step 2: closing a project runs the services' `dispose()` and writes
+    the workspace file on a different schedule than a full IDE shutdown, so both routes need
+    checking.
+    - Start a review so both tool windows are hidden, mark one file, then **File → Close Project**
+      (do not quit — you should land on the Welcome screen with the IDE still running).
+    - Reopen the same project from the Welcome screen.
+    - **Expected:** the Project and Review Queue tool windows are both back on their own, with no
+      "IDE internal error" balloon and no error in `idea.log` attributed to `reviewqueue`. The
+      session is not resumed; only the layout is.
+    - Then repeat from the same state but **quit the IDE entirely** (step 2's route), to confirm
+      both shutdown paths end with the layout restored.
+
+13. **Start Review from Find Action, with the tool window never opened.**
+    The diff toolbar's buttons are resolved from the action registry precisely so this path works;
+    nothing else in this checklist exercises it.
+    - Start from a **freshly launched IDE** and open a project with unreviewed staged files.
+      **Do not open the Review Queue tool window at all** in this IDE session — not once. (If you
+      already have, restart the IDE before doing this step.)
+    - Press <kbd>Shift</kbd> twice, or <kbd>Cmd</kbd>+<kbd>Shift</kbd>+<kbd>A</kbd>, for Find
+      Action; type **Start Review** and run it.
+    - **Expected:** the first unreviewed file opens as a diff and its toolbar carries all four
+      buttons — **Previous File**, **Mark Reviewed**, **Toggle Reviewed**, **End Review**. A diff
+      with no toolbar buttons here would strand the user with only the keyboard shortcut and a tab
+      close as the way out; report it if any button is missing.
+    - Click **End Review**. **Expected:** the Project tool window comes back, and the **Review Queue
+      tool window does not pop open** — you never had it open, so ending the review must not open a
+      panel you did not ask for.
+
 ---
 
 ## Sign-off
@@ -394,8 +476,14 @@ the code — only from having done it in the IDE):
 - [ ] 20b. Hidden layout survives quitting and reopening the IDE mid-session
 - [ ] 20c. Closing the review diff tab by hand ends the session and restores the layout
 - [ ] 20d. Mis-mark recovery: Mark Reviewed → Previous File → Toggle Reviewed → Mark Reviewed
-- [ ] 20e. Ctrl+Shift+Space marks in the diff and does not shadow Smart Type Completion elsewhere
+- [ ] 20e. Ctrl+Shift+Space marks in the diff and, **while the session is still running**, still
+      leaves Smart Type Completion working in a normal editor (no ambiguity popup, no silent mark)
 - [ ] 20f. Start Review after a fix round walks only the changed file(s)
 - [ ] 20g. Toggle Reviewed enables (re-test: previously looked permanently disabled)
 - [ ] 20h. Tab title tracks progress forward through at least three consecutive marks
 - [ ] 20i. Completion balloon fires from marking the last file via the diff toolbar/shortcut
+- [ ] 20j. A file leaving the queue mid-session is marked or visibly skipped, never silently passed
+- [ ] 20k. Previous File is disabled on the first file; Scope is disabled during a session
+- [ ] 20l. Closing the project mid-session restores the layout (and so does quitting the IDE)
+- [ ] 20m. Start Review from Find Action, tool window never opened: all four diff buttons present,
+      and End Review does not pop the Review Queue panel open
