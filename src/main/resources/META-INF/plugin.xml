@@ -57,15 +57,30 @@
                 text="Mark Reviewed"
                 description="Mark this file reviewed and open the next one">
             <!--
-              Cmd+Shift+Enter on macOS, Ctrl+Shift+Enter elsewhere. replace-all stops macOS
-              inheriting the $default chord, which is EditorCompleteStatement there.
+              Four chords, so the action is reachable wherever the reader's hand is resting.
+              Alt+Shift+ Z / Space / Enter are platform-neutral; the undo-style chord is
+              Cmd+Shift+Z on macOS and Ctrl+Shift+Z elsewhere.
 
-              Never bind this to the space bar: Ctrl+Shift+Space is SmartTypeCompletion, and macOS
-              consumes the whole Cmd+Space family for input-source switching before the IDE sees the
-              key. MarkReviewedShortcutTest pins both lessons and the one collision we accept.
+              Two are knowingly shared with bundled actions - Ctrl+Shift+Z is $Redo, Alt+Shift+Enter
+              is SplitChooser and the Grid plugin. Tolerable only because MarkReviewedAction.update
+              enables this action solely inside the review diff viewer, whose editors are read-only,
+              so those actions are disabled exactly where this one is live.
+
+              Never bind this to Ctrl+Shift+Space (SmartTypeCompletion) or anything in the macOS
+              Cmd+Space family (input-source switching eats it before the IDE sees the key).
+              MarkReviewedShortcutTest pins every one of these decisions.
             -->
-            <keyboard-shortcut keymap="$default" first-keystroke="control shift ENTER"/>
-            <keyboard-shortcut keymap="Mac OS X 10.5+" first-keystroke="meta shift ENTER" replace-all="true"/>
+            <keyboard-shortcut keymap="$default" first-keystroke="alt shift Z"/>
+            <keyboard-shortcut keymap="$default" first-keystroke="alt shift SPACE"/>
+            <keyboard-shortcut keymap="$default" first-keystroke="alt shift ENTER"/>
+            <keyboard-shortcut keymap="$default" first-keystroke="control shift Z"/>
+            <!--
+              A plugin keyboard-shortcut on a child keymap ADDS to what that keymap inherits, so the
+              removal is required: without it macOS would answer to Ctrl+Shift+Z as well, and that is
+              $Redo there too (the macOS keymap never redeclares $Redo).
+            -->
+            <keyboard-shortcut keymap="Mac OS X 10.5+" first-keystroke="meta shift Z"/>
+            <keyboard-shortcut keymap="Mac OS X 10.5+" first-keystroke="control shift Z" remove="true"/>
         </action>
         <action id="ReviewQueue.ToggleReviewed"
                 class="dev.tweety.reviewqueue.actions.ToggleReviewedAction"
