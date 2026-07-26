@@ -314,19 +314,29 @@ happen in the diff viewer once a review is running. This section checks that flo
      from there, in order — the round trip did not skip or duplicate a file.
 
 5. **The Mark Reviewed shortcut marks and advances in the review diff.**
-   - During a review, place focus in the diff viewer. Press Cmd+Shift+Space on macOS, or
-     Ctrl+Alt+Shift+Space on Windows/Linux. **Expected:** it marks the file reviewed and
-     advances, same as clicking Mark Reviewed.
+   - During a review, place focus in the diff viewer. Press Alt+Shift+V (⌥⇧V on macOS).
+     **Expected:** it marks the file reviewed and advances, same as clicking Mark Reviewed.
    - Now the case that matters: **leave the review running.** Do not click End Review. With the
      session still active, open a normal source file in another editor tab (Cmd+Shift+N / double
      click a file in the Recent Files popup — the Project tool window is hidden), click into that
-     editor so it has focus, and put the caret inside a method call. Press Cmd+Shift+Space (on
-     macOS) or Ctrl+Alt+Shift+Space (on Windows/Linux).
-   - **Expected:** Smart Type Completion (or completion in general) responds normally, exactly as it would with the plugin uninstalled. The Mark Reviewed shortcut does **nothing at all** — no "Choose action" popup, no ambiguity, no silent advance through the review.
-   - **To verify the bindings are correct**, open Settings → Keymap, search for "Mark Reviewed", and
-     confirm it shows the expected shortcut with no conflict warning. (A keymap name the platform
-     does not recognise is silently ignored; this is the only check that catches a typo in the
-     `keymap=` attribute.)
+     editor so it has focus, and press Alt+Shift+V.
+   - **Expected:** it does **nothing at all** — no "Choose action" popup, no ambiguity, no silent
+     advance through the review. That is the `DIFF_CONTEXT` gate doing its job.
+   - **To verify the binding registered**, open Settings → Keymap, search for "Mark Reviewed", and
+     confirm it shows Alt+Shift+V with no conflict warning.
+
+   **If the shortcut does nothing but the toolbar button works**, the action and its gate are fine
+   and the chord itself is being eaten before the IDE sees it. Do not start by suspecting the plugin.
+   Diagnose it this way, which takes a minute and no rebuild: in Settings → Keymap, add a second,
+   unrelated shortcut to Mark Reviewed and press that instead. If the second chord works, the
+   original is being consumed below the IDE and the fix is to choose a different one.
+
+   Two chords have already failed this way, which is why the binding is what it is:
+   - `Ctrl+Shift+Space` is Smart Type Completion in both bundled keymaps.
+   - `Cmd+Shift+Space` never reaches the IDE on macOS once a second input source is installed — the
+     OS claims the Cmd+Space family for input-source switching. Note that `defaults read
+     com.apple.symbolichotkeys` does **not** reliably list this: a chord's absence from that plist is
+     not evidence the system leaves it alone.
 
 6. **Start Review after a fix round walks only the changed files.**
    - Finish or end a review with every file marked. Edit and re-stage exactly one of the
@@ -473,12 +483,11 @@ the code — only from having done it in the IDE):
 - [ ] 20b. Hidden layout survives quitting and reopening the IDE mid-session
 - [ ] 20c. Closing the review diff tab by hand ends the session and restores the layout
 - [ ] 20d. Mis-mark recovery: Mark Reviewed → Previous File → Toggle Reviewed → Mark Reviewed
-- [ ] 20e. The Mark Reviewed shortcut marks and advances in the review diff — Cmd+Shift+Space on
-      macOS, Ctrl+Alt+Shift+Space on Windows/Linux — and **while the session is still running**
-      the chord in a normal editor does nothing at all (no mark, no ambiguity popup), with Smart
-      Type Completion on Ctrl+Shift+Space still working there. Confirm in Settings → Keymap that
-      Mark Reviewed shows the expected chord and no conflict warning: a keymap name the platform
-      does not recognise is ignored silently, and this is the only check that catches it.
+- [ ] 20e. Alt+Shift+V (⌥⇧V) marks and advances in the review diff, and **while the session is
+      still running** does nothing at all in a normal editor (no mark, no ambiguity popup).
+      Confirm in Settings → Keymap that Mark Reviewed shows Alt+Shift+V with no conflict warning.
+      If the chord does nothing while the toolbar button works, follow the diagnosis note in
+      section 5 — the chord is being eaten below the IDE, not by the plugin.
 - [ ] 20f. Start Review after a fix round walks only the changed file(s)
 - [ ] 20g. Toggle Reviewed enables (re-test: previously looked permanently disabled)
 - [ ] 20h. Tab title tracks progress forward through at least three consecutive marks

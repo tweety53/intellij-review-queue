@@ -56,8 +56,12 @@
                 class="dev.tweety.reviewqueue.actions.MarkReviewedAction"
                 text="Mark Reviewed"
                 description="Mark this file reviewed and open the next one">
-            <keyboard-shortcut keymap="$default" first-keystroke="ctrl alt shift SPACE"/>
-            <keyboard-shortcut keymap="Mac OS X 10.5+" first-keystroke="meta shift SPACE" replace-all="true"/>
+            <!--
+              One declaration on $default, inherited by every other keymap including macOS.
+              Deliberately not a per-keymap chord: see MarkReviewedShortcutTest for why SPACE and
+              keymap-name targeting are both off the table.
+            -->
+            <keyboard-shortcut keymap="$default" first-keystroke="alt shift V"/>
         </action>
         <action id="ReviewQueue.ToggleReviewed"
                 class="dev.tweety.reviewqueue.actions.ToggleReviewedAction"
