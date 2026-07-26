@@ -8,14 +8,13 @@ import com.intellij.openapi.actionSystem.CommonDataKeys
 import dev.tweety.reviewqueue.queue.ReviewSessionService
 
 /**
- * Adds or removes the mark on the file currently displayed, without moving. Paired with
- * Previous File this is the recovery path for a mis-mark; without it the only undo is Reset All,
- * which clears every mark in the project.
+ * Steps back one file without changing any mark. This is what makes a mis-mark recoverable:
+ * marking advances immediately, so the wrong file is already behind you when you notice.
  */
-class ToggleReviewedAction : AnAction(
-    "Toggle Reviewed",
-    "Add or remove the reviewed mark on this file, without moving to another file",
-    AllIcons.Actions.Undo,
+class PreviousFileAction : AnAction(
+    "Previous File",
+    "Go back one file without changing its reviewed mark",
+    AllIcons.Actions.Back,
 ) {
 
     override fun getActionUpdateThread() = ActionUpdateThread.EDT
@@ -28,6 +27,6 @@ class ToggleReviewedAction : AnAction(
 
     override fun actionPerformed(e: AnActionEvent) {
         val project = e.getData(CommonDataKeys.PROJECT) ?: return
-        ReviewSessionService.getInstance(project).toggleCurrent()
+        ReviewSessionService.getInstance(project).previous()
     }
 }

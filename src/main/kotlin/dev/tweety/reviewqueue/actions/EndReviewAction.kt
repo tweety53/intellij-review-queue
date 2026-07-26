@@ -7,27 +7,22 @@ import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.actionSystem.CommonDataKeys
 import dev.tweety.reviewqueue.queue.ReviewSessionService
 
-/**
- * Adds or removes the mark on the file currently displayed, without moving. Paired with
- * Previous File this is the recovery path for a mis-mark; without it the only undo is Reset All,
- * which clears every mark in the project.
- */
-class ToggleReviewedAction : AnAction(
-    "Toggle Reviewed",
-    "Add or remove the reviewed mark on this file, without moving to another file",
-    AllIcons.Actions.Undo,
+/** Leaves the guided pass and restores the layout. Marks already made are kept. */
+class EndReviewAction : AnAction(
+    "End Review",
+    "Leave the guided review and restore the tool windows",
+    AllIcons.Actions.Exit,
 ) {
 
     override fun getActionUpdateThread() = ActionUpdateThread.EDT
 
     override fun update(e: AnActionEvent) {
         val project = e.getData(CommonDataKeys.PROJECT)
-        val service = project?.let { ReviewSessionService.getInstance(it) }
-        e.presentation.isEnabled = service != null && service.isActive && service.currentKey() != null
+        e.presentation.isEnabled = project != null && ReviewSessionService.getInstance(project).isActive
     }
 
     override fun actionPerformed(e: AnActionEvent) {
         val project = e.getData(CommonDataKeys.PROJECT) ?: return
-        ReviewSessionService.getInstance(project).toggleCurrent()
+        ReviewSessionService.getInstance(project).end()
     }
 }

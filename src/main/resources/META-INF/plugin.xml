@@ -26,14 +26,14 @@
                     class="dev.tweety.reviewqueue.ui.ScopeSelector"
                     text="Scope"
                     description="Choose what the review queue lists"/>
-            <action id="ReviewQueue.MarkReviewed"
-                    class="dev.tweety.reviewqueue.actions.MarkReviewedAction"
-                    text="Mark Reviewed"
-                    description="Mark the current file reviewed and go to the next unreviewed file"/>
-            <action id="ReviewQueue.ToggleReviewed"
-                    class="dev.tweety.reviewqueue.actions.ToggleReviewedAction"
-                    text="Toggle Reviewed"
-                    description="Add or remove the reviewed mark on the selected file, without moving the cursor"/>
+            <action id="ReviewQueue.StartReview"
+                    class="dev.tweety.reviewqueue.actions.StartReviewAction"
+                    text="Start Review"
+                    description="Hide the side panels and walk the unreviewed files one at a time"/>
+            <action id="ReviewQueue.EndReview"
+                    class="dev.tweety.reviewqueue.actions.EndReviewAction"
+                    text="End Review"
+                    description="Leave the guided review and restore the tool windows"/>
             <action id="ReviewQueue.Refresh"
                     class="dev.tweety.reviewqueue.actions.RefreshQueueAction"
                     text="Refresh"
@@ -43,5 +43,20 @@
                     text="Reset All"
                     description="Clear every reviewed mark in this project"/>
         </group>
+
+        <action id="ReviewQueue.PreviousFile"
+                class="dev.tweety.reviewqueue.actions.PreviousFileAction"
+                text="Previous File"
+                description="Go back one file without changing its reviewed mark"/>
+        <action id="ReviewQueue.MarkReviewed"
+                class="dev.tweety.reviewqueue.actions.MarkReviewedAction"
+                text="Mark Reviewed"
+                description="Mark this file reviewed and open the next one">
+            <keyboard-shortcut keymap="$default" first-keystroke="ctrl shift SPACE"/>
+        </action>
+        <action id="ReviewQueue.ToggleReviewed"
+                class="dev.tweety.reviewqueue.actions.ToggleReviewedAction"
+                text="Toggle Reviewed"
+                description="Add or remove the reviewed mark on this file, without moving to another file"/>
     </actions>
 </idea-plugin>
