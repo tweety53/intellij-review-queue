@@ -1,6 +1,7 @@
 package dev.tweety.reviewqueue.queue
 
 import com.intellij.openapi.Disposable
+import com.intellij.openapi.actionSystem.ActionManager
 import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
@@ -32,8 +33,20 @@ class ReviewSessionService(private val project: Project) : Disposable {
 
     private var session: ReviewSession? = null
 
-    /** Actions shown in the diff toolbar. Set by the UI layer once, at tool window creation. */
-    internal var diffActions: List<AnAction> = emptyList()
+    /**
+     * Resolved here rather than handed in by the tool window: Start Review is reachable from Find
+     * Action without the panel ever being constructed, and a guided diff with no toolbar buttons
+     * strands the user with only the keyboard shortcut and a tab close as the way out.
+     */
+    private val diffActions: List<AnAction> by lazy {
+        val manager = ActionManager.getInstance()
+        listOfNotNull(
+            manager.getAction("ReviewQueue.PreviousFile"),
+            manager.getAction("ReviewQueue.MarkReviewed"),
+            manager.getAction("ReviewQueue.ToggleReviewed"),
+            manager.getAction("ReviewQueue.EndReview"),
+        )
+    }
 
     init {
         project.messageBus.connect(this).subscribe(

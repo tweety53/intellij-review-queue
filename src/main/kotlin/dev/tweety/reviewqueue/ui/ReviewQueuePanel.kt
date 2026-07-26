@@ -11,7 +11,6 @@ import com.intellij.ui.components.JBScrollPane
 import com.intellij.util.ui.JBUI
 import dev.tweety.reviewqueue.model.displayName
 import dev.tweety.reviewqueue.queue.ReviewQueueService
-import dev.tweety.reviewqueue.queue.ReviewSessionService
 import javax.swing.JPanel
 import java.awt.BorderLayout
 
@@ -58,13 +57,6 @@ class ReviewQueuePanel(private val project: Project) :
                 ReviewDiffOpener.open(project, key)
             }
         }
-
-        ReviewSessionService.getInstance(project).diffActions = listOf(
-            ActionManager.getInstance().getAction("ReviewQueue.PreviousFile"),
-            ActionManager.getInstance().getAction("ReviewQueue.MarkReviewed"),
-            ActionManager.getInstance().getAction("ReviewQueue.ToggleReviewed"),
-            ActionManager.getInstance().getAction("ReviewQueue.EndReview"),
-        )
 
         service.addListener(::update, this)
         service.refresh()
