@@ -313,23 +313,20 @@ happen in the diff viewer once a review is running. This section checks that flo
    - Click **Mark Reviewed**. **Expected:** the file is marked again and the pass continues forward
      from there, in order — the round trip did not skip or duplicate a file.
 
-5. **The shortcut fires in the diff and does not leak into a normal editor.**
-   - During a review, place focus in the diff viewer and press
-     <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Space</kbd>. **Expected:** it marks the file reviewed and
+5. **The Mark Reviewed shortcut marks and advances in the review diff.**
+   - During a review, place focus in the diff viewer. Press Cmd+Shift+Space on macOS, or
+     Ctrl+Alt+Shift+Space on Windows/Linux. **Expected:** it marks the file reviewed and
      advances, same as clicking Mark Reviewed.
    - Now the case that matters: **leave the review running.** Do not click End Review. With the
      session still active, open a normal source file in another editor tab (Cmd+Shift+N / double
      click a file in the Recent Files popup — the Project tool window is hidden), click into that
-     editor so it has focus, and put the caret inside a method call. Press
-     <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Space</kbd>.
-   - **Expected:** Smart Type Completion pops up, exactly as it would with the plugin uninstalled.
-     **Two specific failures to watch for, both defects — stop and report either:**
-     - a "Choose action" / ambiguity popup offering both Smart Type Completion and Mark Reviewed;
-     - no popup at all, and instead the review silently advances to the next file (check the diff
-       tab title's `Review N/M` and the progress count — a silent mis-mark).
-
-     An active session is the only state in which the plugin's action is even eligible, so testing
-     this chord *after* ending the review proves nothing. It must be tested mid-session.
+     editor so it has focus, and put the caret inside a method call. Press Cmd+Shift+Space (on
+     macOS) or Ctrl+Alt+Shift+Space (on Windows/Linux).
+   - **Expected:** Smart Type Completion (or completion in general) responds normally, exactly as it would with the plugin uninstalled. The Mark Reviewed shortcut does **nothing at all** — no "Choose action" popup, no ambiguity, no silent advance through the review.
+   - **To verify the bindings are correct**, open Settings → Keymap, search for "Mark Reviewed", and
+     confirm it shows the expected shortcut with no conflict warning. (A keymap name the platform
+     does not recognise is silently ignored; this is the only check that catches a typo in the
+     `keymap=` attribute.)
 
 6. **Start Review after a fix round walks only the changed files.**
    - Finish or end a review with every file marked. Edit and re-stage exactly one of the
@@ -476,8 +473,12 @@ the code — only from having done it in the IDE):
 - [ ] 20b. Hidden layout survives quitting and reopening the IDE mid-session
 - [ ] 20c. Closing the review diff tab by hand ends the session and restores the layout
 - [ ] 20d. Mis-mark recovery: Mark Reviewed → Previous File → Toggle Reviewed → Mark Reviewed
-- [ ] 20e. Ctrl+Shift+Space marks in the diff and, **while the session is still running**, still
-      leaves Smart Type Completion working in a normal editor (no ambiguity popup, no silent mark)
+- [ ] 20e. The Mark Reviewed shortcut marks and advances in the review diff — Cmd+Shift+Space on
+      macOS, Ctrl+Alt+Shift+Space on Windows/Linux — and **while the session is still running**
+      the chord in a normal editor does nothing at all (no mark, no ambiguity popup), with Smart
+      Type Completion on Ctrl+Shift+Space still working there. Confirm in Settings → Keymap that
+      Mark Reviewed shows the expected chord and no conflict warning: a keymap name the platform
+      does not recognise is ignored silently, and this is the only check that catches it.
 - [ ] 20f. Start Review after a fix round walks only the changed file(s)
 - [ ] 20g. Toggle Reviewed enables (re-test: previously looked permanently disabled)
 - [ ] 20h. Tab title tracks progress forward through at least three consecutive marks

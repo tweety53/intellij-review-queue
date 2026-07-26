@@ -18,10 +18,14 @@ class MarkReviewedAction : AnAction(
     override fun getActionUpdateThread() = ActionUpdateThread.EDT
 
     /**
-     * Scoped to the diff viewer, not just to an active session. The Ctrl+Shift+Space binding is
-     * registered in `$default`, where it collides with Smart Type Completion; without the
-     * DIFF_CONTEXT gate the chord in a normal editor mid-session either silently mis-marks a file
-     * or raises a "Choose action" popup instead of completing.
+     * Scoped to the diff viewer, not just to an active session. The shortcut is registered
+     * IDE-wide, so mid-session it is live in every editor — and marking "the file on screen" means
+     * nothing in a normal editor. Without this gate the chord there would silently mark whichever
+     * file the review happens to be sitting on.
+     *
+     * This is not about a keymap collision: the bindings are chords that are free in both
+     * `$default` and the macOS keymap (see MarkReviewedShortcutTest). The gate earns its place
+     * independently of that.
      */
     override fun update(e: AnActionEvent) {
         val project = e.getData(CommonDataKeys.PROJECT)
