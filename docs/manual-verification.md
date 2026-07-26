@@ -286,6 +286,64 @@ the IDE, and redo sections 3–16 before reading the log.
 4. Note in the sign-off whether `ide.slow.operations.assertion` was on for the run you are
    reporting. If it was off, say so — the log result is inconclusive.
 
+## 20. Guided review mode
+
+The tool window is now a scope picker and a launcher; marking, un-marking and navigation all
+happen in the diff viewer once a review is running. This section checks that flow end to end.
+
+1. **Start Review hides both tool windows; End Review restores them.**
+   - With the queue showing at least two unreviewed files, click **Start Review**.
+   - **Expected:** the Project tool window and the Review Queue tool window both disappear, and the
+     first unreviewed file opens as a diff with **Previous File**, **Mark Reviewed**, **Toggle
+     Reviewed** and **End Review** on the diff viewer's own toolbar.
+   - Click **End Review**. **Expected:** both tool windows reappear, the diff tab closes, and every
+     mark made during the pass is kept.
+
+2. **The persisted layout snapshot survives quitting mid-session.**
+   - Start Review again, mark one file, then quit the IDE entirely (not just close the project)
+     while the tool windows are still hidden.
+   - Reopen the same project.
+   - **Expected:** the Project and Review Queue tool windows come back on their own, without you
+     doing anything else. (The session itself is not resumed — this only checks that the layout
+     does not stay stuck hidden with no explanation.)
+
+3. **Closing the review diff tab by hand ends the session.**
+   - Start Review, then close the diff tab yourself (the "x" on the tab, or Ctrl+F4/Cmd+W).
+   - **Expected:** both tool windows restore immediately, the same as clicking End Review. The
+     session does not linger in a state where the tool windows are hidden but no diff is open.
+
+4. **Mis-mark recovery: Previous File + Toggle Reviewed.**
+   - Start Review. Click **Mark Reviewed** on the first file (this is the "wrong" mark).
+   - Click **Previous File**. **Expected:** the diff steps back to the file just marked, its mark
+     is untouched, and the tab title's `Review N/M` reflects the earlier position again.
+   - Click **Toggle Reviewed**. **Expected:** that file's mark is removed and the diff stays on the
+     same file (Toggle Reviewed does not advance).
+   - Click **Mark Reviewed**. **Expected:** the file is marked again and the pass continues forward
+     from there, in order — the round trip did not skip or duplicate a file.
+
+5. **The shortcut fires in the diff and does not leak into a normal editor.**
+   - During a review, place focus in the diff viewer and press
+     <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Space</kbd>. **Expected:** it marks the file reviewed and
+     advances, same as clicking Mark Reviewed.
+   - End the review (or open any other file outside a review session) and put the cursor inside a
+     method call in a normal source editor. Press <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Space</kbd>.
+   - **Expected:** Smart Type Completion pops up as usual — the plugin's shortcut binding must not
+     shadow the platform default outside a review. If completion does not appear, or something else
+     happens, stop and report it; this is the exact chord IntelliJ ships for Smart Type Completion.
+
+6. **Start Review after a fix round walks only the changed files.**
+   - Finish or end a review with every file marked. Edit and re-stage exactly one of the
+     previously-reviewed files (as in section 8).
+   - Click **Start Review** again. **Expected:** the pass covers only that one file — Start Review
+     is disabled with nothing unreviewed, and once something is unreviewed it opens only that.
+
+7. **Re-test carried over: Toggle Reviewed now enables.**
+   In the previous release, Toggle Reviewed looked permanently disabled. The likely cause was
+   `refresh()` dying under a read action and leaving the queue empty, which fed nothing for the
+   action to act on. That code path is fixed. Confirm directly: during a review (or with a file
+   selected in the tool window before Start Review), Toggle Reviewed is enabled and works as
+   described in step 4/section 15, not greyed out.
+
 ---
 
 ## Sign-off
@@ -315,3 +373,10 @@ the code — only from having done it in the IDE):
 - [ ] 18. Cursor relocation — feels right? (yes/no + comment)
 - [ ] 19. idea.log read; no StackOverflowError / slow-EDT / reviewqueue diagnostics
       (state whether `ide.slow.operations.assertion` was enabled)
+- [ ] 20a. Start Review hides both tool windows; End Review restores them
+- [ ] 20b. Hidden layout survives quitting and reopening the IDE mid-session
+- [ ] 20c. Closing the review diff tab by hand ends the session and restores the layout
+- [ ] 20d. Mis-mark recovery: Mark Reviewed → Previous File → Toggle Reviewed → Mark Reviewed
+- [ ] 20e. Ctrl+Shift+Space marks in the diff and does not shadow Smart Type Completion elsewhere
+- [ ] 20f. Start Review after a fix round walks only the changed file(s)
+- [ ] 20g. Toggle Reviewed enables (re-test: previously looked permanently disabled)

@@ -3,6 +3,9 @@
 **Date:** 2026-07-25
 **Status:** Approved
 
+**Superseded in part by** `2026-07-26-guided-review-mode-design.md`: marking, un-marking and
+navigation moved from the tool window into the diff viewer, and the queue no longer holds a cursor.
+
 ## Purpose
 
 myflow's Gate B (`awaiting-do-review` / `do-review-started`) asks a human to read a staged,

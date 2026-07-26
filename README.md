@@ -15,20 +15,36 @@ Download or build the plugin zip, then Settings → Plugins → gear → Install
 
 ## Use
 
-Open the **Review Queue** tool window on the right.
+Open the **Review Queue** tool window on the right and pick a **Scope**: Staged (the default),
+Branch vs Base, or an explicit Commit Range. The Commit Range dialog rejects refs containing a
+space or `;`.
 
-- **Scope** — choose Staged (the default), Branch vs Base, or an explicit Commit Range. The
-  Commit Range dialog rejects refs containing a space or `;`.
-- **Mark Reviewed** — marks the selected file and moves to the next unreviewed one.
-- Click any row to open its diff. All files in the queue share a single reused "Review Queue"
-  diff tab (a chain viewer), rather than accumulating one tab per file. Reviewed files stay
-  listed so they can be revisited.
-- **Refresh** re-reads the current scope. **Reset All** clears every reviewed mark in the project.
-- Files are grouped by git root (repository), then sorted by path within each root, using the
-  platform's own changes-tree grouping.
+Press **Start Review** to begin a guided pass over everything still unreviewed in that scope. This
+hides the Project and Review Queue tool windows and opens the first file as a diff, with the
+review actions on the diff viewer's own toolbar:
+
+- **Mark Reviewed** (also <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Space</kbd>) — marks the file on
+  screen reviewed and opens the next unreviewed one. Advancing **replaces** the diff tab rather
+  than opening a new one, so there is only ever one review tab.
+- **Previous File** — steps back to the file shown before this one, without changing any mark.
+  Use it together with **Toggle Reviewed** to fix a mis-mark: step back, toggle the wrong mark
+  off, then Mark Reviewed to continue from there.
+- **Toggle Reviewed** — adds or removes the reviewed mark on the file currently on screen without
+  moving to another file.
+- **End Review** — leaves the guided pass early. Every mark made so far is kept, and both tool
+  windows are restored. Closing the review diff tab by hand does the same thing.
+
+The diff tab's title tracks progress as `Review N/M - filename`. Marking the last file restores
+both tool windows automatically and fires the completion balloon.
+
+Outside a review session, the tool window itself still lists every file in the current scope with
+its reviewed state, and **Refresh** re-reads the scope. **Reset All** clears every reviewed mark in
+the project. Files are grouped by git root (repository), then sorted by path within each root,
+using the platform's own changes-tree grouping.
 
 Reviewed marks are content-addressed: editing a file drops its mark automatically, so a fix round
-returns exactly the rewritten file(s) to the queue. Marks are stored in per-project workspace state
+returns exactly the rewritten file(s) to the queue, and starting a new review after a fix round
+walks only those files. Marks are stored in per-project workspace state
 (`.idea/workspace.xml`-equivalent storage) — never in the repository, and never shared between
 machines. They survive an IDE restart.
 
@@ -57,13 +73,19 @@ IntelliJ IDEA Ultimate 2026.2 or newer (build 262+), with the bundled Git4Idea p
 
 ## Verification status
 
-- `./gradlew test` — 50 tests, all green.
+- `./gradlew test` — 79 tests, all green.
 - `./gradlew verifyPlugin` — **Compatible** with IU-262.9437.22, zero compatibility problems.
   It reports 4 deprecated-API and 6 experimental-API usages, all on `ToolWindowFactory`
   (`isDoNotActivateOnStart`, `isApplicable`, `getIcon`, `getAnchor`, `manage`). These are Kotlin
   compiler-generated bridge overrides for that interface's default methods, not calls this plugin
   makes — `ReviewQueueToolWindowFactory` only implements `createToolWindowContent`. Every Kotlin
   plugin implementing `ToolWindowFactory` reports the same usages; there is nothing to fix here.
-- Manual UI verification (installing the built zip and running it against a real Gate B worktree)
-  has **not** been performed by automation. See `docs/manual-verification.md` for the checklist a
-  human should run before relying on this plugin.
+- `./gradlew runIde` was launched in a headless sandbox with no display attached (`screencapture`
+  fails there with "could not create image from display"), so it could only confirm that the
+  plugin loads cleanly — `dev.tweety.reviewqueue` does not appear in the platform's "Problems
+  found loading plugins" block and nothing else in the log mentions the plugin. No UI interaction
+  was possible in that environment: whether the four diff-toolbar actions
+  (`DiffUserDataKeys.CONTEXT_ACTIONS` on the chain, see `EditorTabDiffPresenter`) actually render,
+  and every other guided-review interaction, remains **unverified by a human**. See
+  `docs/manual-verification.md` for the checklist a human with a real display must run before
+  relying on this plugin — section 20 covers the guided review flow specifically.
