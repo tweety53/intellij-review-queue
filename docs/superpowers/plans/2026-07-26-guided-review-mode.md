@@ -481,7 +481,7 @@ git commit -m "feat: add a diff presenter that owns the session's tab"
 ### Task 4: `ReviewSessionService` — orchestration
 
 **Files:**
-- Create: `src/main/kotlin/dev/tweety/reviewqueue/queue/ReviewSessionService.kt`
+- Create: `../../../src/main/kotlin/dev/tweety/reviewqueue/queue/ReviewSessionService.kt`
 - Modify: `src/main/kotlin/dev/tweety/reviewqueue/queue/ReviewQueueService.kt` (add `markReviewed(key)`)
 - Test: `src/test/kotlin/dev/tweety/reviewqueue/queue/ReviewSessionServiceTest.kt`
 

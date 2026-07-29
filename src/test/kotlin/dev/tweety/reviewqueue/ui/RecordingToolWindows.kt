@@ -20,8 +20,32 @@ import com.intellij.toolWindow.ToolWindowHeadlessManagerImpl
  * which is what lets a test say whether a window was really reopened rather than merely dropped from
  * the record.
  */
-class RecordingToolWindow(project: Project, private var visible: Boolean) :
-    ToolWindowHeadlessManagerImpl.MockToolWindow(project) {
+class RecordingToolWindow(
+    project: Project,
+    private var visible: Boolean,
+    /**
+     * Models `hide()` being called and returning normally without the window actually going
+     * invisible — the failure mode fix round 2's post-hide check (finding D) exists to catch.
+     * `hides` still counts the call; only the visibility flip is skipped.
+     */
+    private val ignoresHide: Boolean = false,
+    /**
+     * Models a plugin that disposes its content on `hide()`, so any *later* `isVisible()` query
+     * throws (e.g. `AlreadyDisposedException`) instead of returning a value — pass-2 round 2's
+     * Important 1: the post-hide diagnostic re-queries ids that were just passed to `hide()`, and
+     * must never let that throw escape `hideForReview()`. `isVisible()` still answers normally
+     * before `hide()` is called, so the sweep's own pre-hide filter is unaffected — only the
+     * post-hide re-query can observe the throw, matching the real failure this models.
+     */
+    private val throwsOnIsVisibleAfterHide: Boolean = false,
+    /**
+     * Models `hide()` itself throwing (pass-3 panel Minor 2) — a third-party tool window whose
+     * `hide()` blows up mid-sweep, e.g. because it eagerly tears down content. `hides` still counts
+     * the call before throwing, so a test can tell "reached and attempted" apart from "never reached"
+     * for the ids after it in the sweep.
+     */
+    private val throwsOnHide: Boolean = false,
+) : ToolWindowHeadlessManagerImpl.MockToolWindow(project) {
 
     var shows = 0
         private set
@@ -29,7 +53,12 @@ class RecordingToolWindow(project: Project, private var visible: Boolean) :
     var hides = 0
         private set
 
-    override fun isVisible() = visible
+    private var disposedAfterHide = false
+
+    override fun isVisible(): Boolean {
+        if (disposedAfterHide) throw IllegalStateException("tool window content was disposed on hide")
+        return visible
+    }
 
     override fun show(runnable: Runnable?) {
         shows++
@@ -38,7 +67,9 @@ class RecordingToolWindow(project: Project, private var visible: Boolean) :
 
     override fun hide(runnable: Runnable?) {
         hides++
-        visible = false
+        if (throwsOnHide) throw IllegalStateException("hide() blew up for this tool window")
+        if (!ignoresHide) visible = false
+        if (throwsOnIsVisibleAfterHide) disposedAfterHide = true
     }
 }
 
@@ -50,10 +81,25 @@ class RecordingToolWindowManager(private val project: Project) : ToolWindowHeadl
 
     private val windows = mutableMapOf<String, RecordingToolWindow>()
 
-    fun register(id: String, visible: Boolean): RecordingToolWindow =
-        RecordingToolWindow(project, visible).also { windows[id] = it }
+    fun register(
+        id: String,
+        visible: Boolean,
+        ignoresHide: Boolean = false,
+        throwsOnIsVisibleAfterHide: Boolean = false,
+        throwsOnHide: Boolean = false,
+    ): RecordingToolWindow =
+        RecordingToolWindow(project, visible, ignoresHide, throwsOnIsVisibleAfterHide, throwsOnHide)
+            .also { windows[id] = it }
 
     override fun getToolWindow(id: String?): ToolWindow? = windows[id]
+
+    /**
+     * The sweep in `hideForReview` enumerates ids rather than consulting a fixed list, so the
+     * fixture has to answer this as well as [getToolWindow]. Returning only registered ids keeps
+     * the two in agreement: every id this returns resolves, and nothing else does.
+     */
+    override val toolWindowIds: Array<String>
+        get() = windows.keys.toTypedArray()
 
     companion object {
         /** Installs a manager for [project] and returns it, undone when [parent] is disposed. */

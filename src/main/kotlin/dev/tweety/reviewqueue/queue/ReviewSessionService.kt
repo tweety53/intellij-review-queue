@@ -79,8 +79,23 @@ class ReviewSessionService(private val project: Project) : Disposable {
             manager.getAction("ReviewQueue.NextFile"),
             manager.getAction("ReviewQueue.MarkReviewed"),
             manager.getAction("ReviewQueue.ToggleReviewed"),
-        ) + listOf(
-            Separator.getInstance(),
+        ) + listOf(Separator.getInstance()) + sessionControls
+    }
+
+    /**
+     * The session and queue controls, exposed as their own contract rather than left for
+     * [ReviewDiffPopupGroup] to reverse-engineer out of [diffActions] by scanning for the
+     * `Separator` above. That separator exists for the toolbar's own layout reasons (see
+     * [diffActions]'s KDoc); it is not a public marker, and a caller that located these five
+     * actions by searching for it would silently break if the toolbar's shape ever changed.
+     *
+     * `PER_FILE_IDS` in `ReviewDiffPopupGroup` lists 7 ids and [diffActions]'s per-file half above
+     * lists 5: the membership genuinely differs (the popup adds `PreviousChange`/`NextChange`,
+     * which have no toolbar button), so the two lists are deliberately not unified — see the
+     * cross-reference comment there.
+     */
+    internal val sessionControls: List<AnAction> by lazy {
+        listOf(
             DiffScopeAction(),
             DiffStartReviewAction(),
             DiffEndReviewAction(),

@@ -165,6 +165,12 @@ is **global** — it fires for Git log diffs, local history, Compare Files, ever
 extension therefore returns immediately unless it finds a private marker `Key<Boolean>` that
 `EditorTabDiffPresenter` stamps on the chain it builds.
 
+> **Superseded by Fix round 1** (`openspec/changes/kan-6-plugin-updates/proposal.md`):
+> `setContextMenuGroupId` turned out not to work — the platform's diff menu never consults it. The
+> actual mechanism installs `ContextMenuPopupHandler.Simple` via `EditorEx.installPopupHandler` from
+> a `DiffViewerListener.onInit()` registered in `onViewerCreated`, so it is appended after the
+> platform's own handler. This section is kept as the as-designed record.
+
 Consequences of that scoping, both intended: Compare with Clipboard is removed **only** inside review
 diffs, and no diff this plugin did not open is ever modified.
 
