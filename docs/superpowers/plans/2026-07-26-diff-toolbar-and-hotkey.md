@@ -497,7 +497,7 @@ class DiffResetAllAction : ResetAllAction(), RightAlignedToolbarAction
 
 - [ ] **Step 6: Rebuild the diff toolbar list**
 
-In `src/main/kotlin/dev/tweety/reviewqueue/queue/ReviewSessionService.kt`, replace the `diffActions`
+In `../../../src/main/kotlin/dev/tweety/reviewqueue/queue/ReviewSessionService.kt`, replace the `diffActions`
 property with:
 
 ```kotlin
@@ -607,7 +607,7 @@ moves within `keys` and refuses anything outside it, so a pick can never grow th
 
 **Files:**
 - Modify: `src/main/kotlin/dev/tweety/reviewqueue/core/ReviewSession.kt`
-- Modify: `src/main/kotlin/dev/tweety/reviewqueue/queue/ReviewSessionService.kt`
+- Modify: `../../../src/main/kotlin/dev/tweety/reviewqueue/queue/ReviewSessionService.kt`
 - Test: `src/test/kotlin/dev/tweety/reviewqueue/core/ReviewSessionTest.kt`
 - Test: `src/test/kotlin/dev/tweety/reviewqueue/queue/ReviewSessionServiceTest.kt`
 
@@ -740,7 +740,7 @@ Expected: FAIL at compilation — `Unresolved reference: jumpTo` on the service.
 
 - [ ] **Step 7: Add `ReviewSessionService.jumpTo`**
 
-In `src/main/kotlin/dev/tweety/reviewqueue/queue/ReviewSessionService.kt`, after `previous()`:
+In `../../../src/main/kotlin/dev/tweety/reviewqueue/queue/ReviewSessionService.kt`, after `previous()`:
 
 ```kotlin
     /**
@@ -957,7 +957,7 @@ toolbar, that navigates on pick.
 - Create: `src/main/kotlin/dev/tweety/reviewqueue/ui/ReviewFileListPopup.kt`
 - Create: `src/main/kotlin/dev/tweety/reviewqueue/actions/ShowFileListAction.kt`
 - Modify: `src/main/resources/META-INF/plugin.xml`
-- Modify: `src/main/kotlin/dev/tweety/reviewqueue/queue/ReviewSessionService.kt` (`diffActions`)
+- Modify: `../../../src/main/kotlin/dev/tweety/reviewqueue/queue/ReviewSessionService.kt` (`diffActions`)
 - Modify: `src/test/kotlin/dev/tweety/reviewqueue/queue/ReviewSessionServiceTest.kt`
 - Modify: `docs/manual-verification.md`
 

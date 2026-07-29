@@ -666,7 +666,7 @@ git add src/main/kotlin/dev/tweety/reviewqueue/actions/ \
 **Files:**
 - Create: `src/main/kotlin/dev/tweety/reviewqueue/ui/ScopePrompts.kt`
 - Create: `src/main/kotlin/dev/tweety/reviewqueue/actions/ScopeActions.kt`
-- Modify: `src/main/kotlin/dev/tweety/reviewqueue/queue/ReviewSessionService.kt`
+- Modify: `../../../src/main/kotlin/dev/tweety/reviewqueue/queue/ReviewSessionService.kt`
 - Test: `src/test/kotlin/dev/tweety/reviewqueue/queue/ScopeSwitchTest.kt`
 
 **Interfaces:**

@@ -9,7 +9,6 @@ import com.intellij.ui.SimpleListCellRenderer
 import com.intellij.util.ui.EmptyIcon
 import dev.tweety.reviewqueue.core.ReviewFileList
 import dev.tweety.reviewqueue.core.ReviewFileRow
-import dev.tweety.reviewqueue.model.displayName
 import dev.tweety.reviewqueue.queue.ReviewQueueService
 import dev.tweety.reviewqueue.queue.ReviewSessionService
 import javax.swing.JList
@@ -45,12 +44,11 @@ object ReviewFileListPopup {
 
         JBPopupFactory.getInstance()
             .createPopupChooserBuilder(rows)
-            // The scope name is here because the deleted panel's label carried it: `N / M reviewed
-            // • <scope>` was the only always-visible statement of what the queue was listing.
-            .setTitle(
-                "${snapshot.reviewedCount} / ${snapshot.items.size} reviewed  •  " +
-                    snapshot.scope.displayName(),
-            )
+            // The scope name is here because the deleted panel's label carried it: `N / M files
+            // reviewed  •  <scope>` was the only always-visible statement of what the queue was
+            // listing. Formatted through ReviewProgressBanner.text so the two surfaces that read the
+            // same QueueSnapshot cannot drift in wording the way they already had.
+            .setTitle(ReviewProgressBanner.text(snapshot.reviewedCount, snapshot.items.size, snapshot.scope))
             .setRenderer(rowRenderer())
             .setSelectedValue(rows.firstOrNull { it.isCurrent }, true)
             .setItemChosenCallback { row -> open(project, session, queue, row) }

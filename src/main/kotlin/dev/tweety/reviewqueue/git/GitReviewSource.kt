@@ -7,15 +7,14 @@ import com.intellij.openapi.vcs.changes.ByteBackedContentRevision
 import com.intellij.openapi.vcs.changes.Change
 import dev.tweety.reviewqueue.core.BaseRefResolver
 import dev.tweety.reviewqueue.core.ContentHasher
-import dev.tweety.reviewqueue.core.StagedFilter
 import dev.tweety.reviewqueue.model.CommitRangeValidator
 import dev.tweety.reviewqueue.model.ReviewItem
 import dev.tweety.reviewqueue.model.ReviewKey
 import dev.tweety.reviewqueue.model.ReviewScope
 import git4idea.changes.GitChangeUtils
 import git4idea.index.ContentVersion
+import git4idea.index.GitFileStatus
 import git4idea.index.createChange
-import git4idea.index.getStatus
 import git4idea.repo.GitRepository
 import git4idea.repo.GitRepositoryManager
 
@@ -74,12 +73,51 @@ class GitReviewSource(private val project: Project) {
         CommitRangeValidator.validateRef(ref, label)?.let { throw VcsException(it) }
     }
 
-    private fun resolveStaged(repository: GitRepository): List<Change> {
-        val statuses = getStatus(project, repository.root, emptyList(), false, false, false)
-        return statuses
-            .filter { it.isTracked() && StagedFilter.isStaged(it.index) }
-            .mapNotNull { createChange(project, repository.root, it, ContentVersion.HEAD, ContentVersion.STAGED) }
-    }
+    /**
+     * `git4idea.index.getStatus` reads `git status --porcelain=v2`, which has no similarity pass: no
+     * combination of its three trailing booleans turns on rename detection, so a `git mv` staged on
+     * top of a modification used to resolve as a delete of the old path plus an add of the new one —
+     * two queue entries for one edit, and a mark on the old path that could never carry over.
+     *
+     * `GitChangeUtils.getStagedChanges` is `git diff --cached -M`, which does have a similarity pass,
+     * and — unlike the `(repository, from, to, detectRenames)` overload the `CommitRange` branch's
+     * comment above warns about — it **throws** `VcsException` rather than swallowing it, so a
+     * failing root still reports git's own message through [RootResult.error].
+     *
+     * It returns `GitChangeUtils.GitDiffChange`, not a platform [Change], so each entry is rebuilt
+     * into one here through the same [GitFileStatus] the old `getStatus`-based path already fed to
+     * [createChange]. Only the `index` character constructed here is synthetic, and `createChange`
+     * (via `git4idea.index.GitFileStatusKt`) is what actually reads it: `'A'` (added) has no HEAD
+     * side, `'D'` (deleted) has no STAGED side, and `'R'` keeps both — with the STAGED side reading
+     * `path` (the new path) and the HEAD side reading `origPath` (the old one). A same-path
+     * modification is given `'R'` too, with `origPath` equal to `path`, which is inert: both sides
+     * land on the one path either way. It is exactly that `'R'`-plus-`origPath` combination that
+     * points the HEAD-side revision at the old path while the STAGED-side revision stays on the new
+     * one, keying the rename to one entry under the new path.
+     *
+     * `getStagedChanges` is `--cached` by construction — a working-tree diff against nothing — so it
+     * cannot surface untracked or ignored files; they never appear in its output, unlike the old
+     * porcelain-based path where an explicit filter was needed to keep them out.
+     */
+    private fun resolveStaged(repository: GitRepository): List<Change> =
+        GitChangeUtils.getStagedChanges(project, repository.root).mapNotNull { diffChange ->
+            val before = diffChange.beforePath
+            val after = diffChange.afterPath
+            val path = after ?: before ?: throw VcsException("a diff entry must have at least one side")
+            val (index, origPath) = when {
+                before == null -> 'A' to null
+                after == null -> 'D' to null
+                // A plain same-path modification also has both sides non-null, so it lands here too,
+                // with origPath == path. That is inert today — createChange's 'R' handling only ever
+                // reads origPath for the HEAD side and path for the STAGED side, and both point at the
+                // same file when they're equal — but it is load-bearing on createChange never
+                // special-casing origPath == path (e.g. to short-circuit rename bookkeeping). If it
+                // ever does, this same-path case needs its own branch.
+                else -> 'R' to before
+            }
+            val status = GitFileStatus(index, ' ', path, origPath)
+            createChange(project, repository.root, status, ContentVersion.HEAD, ContentVersion.STAGED)
+        }
 
     /**
      * **Every** ref handed to git is validated here, not only the one the user typed.

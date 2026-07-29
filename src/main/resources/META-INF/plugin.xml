@@ -20,6 +20,7 @@
         -->
         <notificationGroup id="Review Queue" displayType="BALLOON"/>
         <postStartupActivity implementation="dev.tweety.reviewqueue.ui.ReviewLayoutRestorer"/>
+        <diff.DiffExtension implementation="dev.tweety.reviewqueue.ui.ReviewDiffExtension"/>
     </extensions>
 
     <actions>
@@ -142,6 +143,15 @@
                 class="dev.tweety.reviewqueue.actions.ToggleReviewedAction"
                 text="Toggle Reviewed"
                 description="Add or remove the reviewed mark on this file, without moving to another file"/>
+
+        <!--
+          The diff's context menu. Registered as a group with a class so its children can be composed
+          at popup time: the platform tail must be read live, or entries other plugins contribute to
+          Diff.EditorPopupMenu are silently dropped. Installed onto a viewer's editors by
+          ReviewDiffExtension, never by add-to-group — the menu belongs to this plugin's diffs only.
+        -->
+        <group id="ReviewQueue.DiffPopup"
+               class="dev.tweety.reviewqueue.actions.diff.ReviewDiffPopupGroup"/>
 
         <!--
           The out-of-session surface, replacing the deleted tool window. Declared last in <actions> on

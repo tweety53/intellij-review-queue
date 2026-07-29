@@ -56,7 +56,7 @@ there the way in is the Tools menu or Find Action — or bind your own chord in 
 
 **Show File List** is now the only way to browse the queue, in a pass or out of one: the old panel's
 queue tree is gone with the panel. It lists every file in the current scope with its reviewed state,
-and its title reads `N / M reviewed  •  <scope>` — that title is what replaced the panel's progress
+and its title reads `N / M files reviewed  •  <scope>` — that title is what replaced the panel's progress
 label. Picking a file that is part of a running pass jumps the diff to it; picking one that was
 already reviewed when the pass started opens it as a separate browsing diff and leaves the pass
 alone. Outside a pass, every pick is a browsing diff.
@@ -153,17 +153,6 @@ walks only those files. Marks are stored in per-project workspace state
 (`.idea/workspace.xml`-equivalent storage) — never in the repository, and never shared between
 machines. They survive an IDE restart.
 
-### Known, deliberate limitations
-
-- Rename detection is disabled: a staged rename appears as a delete of the old path plus an add of
-  the new path, not a single rename entry.
-- When the scope is refreshed and the file the cursor was on drops out of the queue (e.g. it was
-  reviewed and content changed upstream), the cursor falls back to whichever item now occupies the
-  old position in the queue — which may already be reviewed. This is intentional (it keeps the
-  cursor from jumping unpredictably) but can feel surprising; see
-  `docs/manual-verification.md` for the checklist item that asks a human to judge whether it feels
-  right in practice.
-
 ## Develop
 
 ```bash
@@ -178,7 +167,7 @@ IntelliJ IDEA Ultimate 2026.2 or newer (build 262+), with the bundled Git4Idea p
 
 ## Verification status
 
-- `./gradlew test` — 194 tests, all green.
+- `./gradlew test` — 215 tests, all green.
 - `./gradlew verifyPlugin` — **Compatible** with IU-262.9437.22, zero compatibility problems, and
   **zero deprecated-API and zero experimental-API usages**.
   Earlier releases reported 4 deprecated and 6 experimental usages, all Kotlin-generated bridge
@@ -202,7 +191,27 @@ IntelliJ IDEA Ultimate 2026.2 or newer (build 262+), with the bundled Git4Idea p
   flush right does not require a human to check, because reading the 2026.2 platform's toolbar-layout
   bytecode is enough to show it cannot, regardless of what a screenshot would show. A `Separator`
   ships instead, grouping the session controls rather than flushing them right — see the design doc's
-  *Known risk* for the bytecode read. See
-  `docs/manual-verification.md` for the checklist a human with a real display must run before
-  relying on this plugin — section 20 covers the guided review flow, and section 24 the entry points
-  this release changed, including the Start Review shortcut, which must be tested twice.
+  *Known risk* for the bytecode read.
+- **The progress banner, the focus-mode tool-window sweep, and the right-click context menu remain
+  unverified by a human**, same as the rest of the guided-review flow above — none of the three has
+  been driven through a real display. Staged-rename detection is exercised end to end by
+  `GitReviewSourceIntegrationTest` against a real `git mv`, so it does not carry the same caveat, but
+  the human pass in `docs/manual-verification.md` section 27 still asks for a look because Branch vs
+  Base and Commit Range are worth confirming unchanged, not just Staged.
+- **One more honest limitation, specific to the context menu.** `ReviewDiffExtensionTest` cannot
+  construct a live `CacheDiffRequestChainProcessor` — building one aborts headlessly with
+  `no ComponentUI class for DiffHeaderToolbarPanel`, because no look-and-feel is registered for that
+  Swing component in a headless test run. The test instead subclasses `DiffContextOnDataHolders`
+  directly (the real base class the platform's private `DiffRequestProcessor$MyDiffContext` extends)
+  and drives it with a real `ChangeDiffRequestChain` and `ChangeDiffRequestProducer`, which exercises
+  the actual marker-propagation logic without building the Swing toolbar around it. That means the
+  claim "the right-click menu appears at all in a real IDE" rests on bytecode disassembly of
+  `intellij.platform.diff.impl` and `intellij.platform.vcs.impl` (see the KDoc on
+  `ReviewDiffExtension` and on `ReviewDiffExtensionTest`) plus this structurally-faithful headless
+  substitute — **not** on a live UI test, because none could be built in this environment. Section 28
+  of the manual checklist is where a human closes that gap.
+
+See `docs/manual-verification.md` for the checklist a human with a real display must run before
+relying on this plugin — section 20 covers the guided review flow, section 24 the entry points KAN-5
+changed (including the Start Review shortcut, which must be tested twice), and sections 25–28 the four
+features new in this release: the progress banner, focus mode, rename detection and the context menu.

@@ -10,6 +10,13 @@ panel is now under **Tools → Review Queue**, and browsing the queue is **Show 
 covers the new entry points specifically, and it contains the one risk this change knowingly carried
 into manual test — the Start Review shortcut. Run section 24 even if you run nothing else.
 
+**Four features new in this release, sections 25–28.** The progress banner (25), the focus-mode
+tool-window sweep (26), staged-rename detection (27) and the review diff's right-click context menu
+(28) are all new since the last manual pass and none of them has been driven by a human yet. Section
+28 in particular carries two checks nothing automated can reach: that an unrelated diff opened during
+a pass keeps the platform's stock menu untouched, and that a binary file's missing context menu is
+deliberate rather than a defect.
+
 ## 1. Install the plugin
 
 1. `open -na "IntelliJ IDEA"` to launch a fresh instance (or use your normal one).
@@ -58,7 +65,7 @@ not reachable headlessly, and it is the design's stated replacement for the dele
 label. It is a human check or it is unchecked.
 
 1. Open **Show File List** and read its title.
-2. **Expected:** it reads `N / M reviewed  •  <scope>` — e.g. `0 / 7 reviewed  •  Staged`. `M` equals
+2. **Expected:** it reads `N / M files reviewed  •  <scope>` — e.g. `0 / 7 files reviewed  •  Staged`. `M` equals
    the total file count from section 3; `N` equals the number already marked reviewed in this project
    (0 on a fresh worktree/profile).
 3. Change the scope (section 9) and reopen the popup. **Expected:** the scope in the title changed
@@ -272,30 +279,6 @@ diff /tmp/review-queue-before.txt /tmp/review-queue-after.txt
 2. **Expected:** `diff` reports no differences at all. Any change to HEAD, to the index/worktree
    status, to the stash list, or a new reflog entry means something mutated the repo — stop and
    report it immediately.
-
-## 17. Known, accepted behaviour — confirm you're fine with it
-
-**Renames show as delete+add.** Rename detection is deliberately disabled. Stage a rename of a
-tracked file (`git mv old new && git add -A` in a scratch test repo, not in gymie) and open the
-Staged scope.
-**Expected:** the queue lists `old` as a deletion and `new` as an addition — two rows, not one
-rename row. **Please confirm you find this acceptable** for Gate B review purposes (it is a
-known, intentional simplification, not a bug) — or note if it should be revisited.
-
-## 18. Known rough edge — judgment call requested
-
-**Cursor relocation on rebuild.** When the queue is refreshed and the file the pass was on is no
-longer in the list (e.g. its content changed since being marked, or the scope changed), the cursor
-falls to whichever file now sits at the same *position* in the queue — which may already be marked
-reviewed, rather than jumping to the nearest unreviewed file.
-
-To observe this: mark the file at position 3 as reviewed, then change the scope (e.g. Staged →
-Branch vs Base and back, or edit+unstage the file at position 3) so the queue rebuilds with a
-different file occupying position 3.
-**Expected reaction:** the cursor moves to whatever is now at position 3, even if already
-reviewed. This is intended behavior (keeps cursor movement predictable/local rather than jumping
-around), not a bug. **Please judge whether this feels right in practice** — flag it if it's
-disorienting enough to warrant a follow-up change.
 
 ## 19. Read the IDE log — do this last
 
@@ -661,6 +644,165 @@ single most important check in this document.
      enablement is a git-root check that must not construct the queue service or start background
      work.
 
+## 25. Progress banner
+
+`ReviewProgressBanner` (`src/main/kotlin/dev/tweety/reviewqueue/ui/ReviewProgressBanner.kt`) puts a
+`N / M files reviewed  •  <scope>` strip with a progress bar above the review diff, delivered through
+`DiffUserDataKeys.NOTIFICATION_PROVIDERS` so it lives above the diff content rather than being a
+component the presenter builds and forgets. The banner subscribes to the same queue listener the
+file-list popup's title reads, so the two numbers can never disagree — but that also means the one
+property worth checking by hand is whether the *subscription* actually fires on every gesture that
+changes the count, not just the ones that replace the diff tab.
+
+1. **Fresh scope reads `0 / N`.** With an unreviewed scope, run **Start Review**.
+   **Expected:** the banner appears above the diff, reading `0 / N files reviewed  •  <scope>`
+   (e.g. `0 / 7 files reviewed  •  Staged`), and the bar is empty.
+2. **Mark Reviewed advances the number.** Click **Mark Reviewed**.
+   **Expected:** the banner now reads `1 / N`, and the bar has moved. This much a render-once banner
+   would also get right, because the diff tab is replaced anyway.
+3. **The subtle one — Toggle Reviewed moves the number without the tab being replaced.** Step back
+   with **Previous File** onto the file just marked, then click **Toggle Reviewed**.
+   **Expected:** the banner's count decrements by exactly 1 (back to the value before step 2), even
+   though the diff viewer stayed on the same file and the tab was never recreated. **This is the check
+   that actually distinguishes a live subscription from a snapshot rendered once**: `Toggle Reviewed`
+   is deliberately excluded from `DiffNotificationProvider.createNotification`'s per-viewer callback —
+   see the KDoc on `ReviewProgressBanner.provider` — so a banner that only re-rendered when the tab
+   changed would pass every other check in this section and silently show a stale count here. If the
+   number does not move without a visible tab swap, that is the defect this item exists to catch.
+4. **A background rebuild also moves it.** With a pass running, re-stage a change to a file outside
+   the current file (as in section 20.10) so the queue rebuilds behind the scenes.
+   **Expected:** the banner's `M` (and `N` if the rebuild affected a reviewed file) updates without you
+   touching Mark Reviewed or Toggle Reviewed.
+5. **Completing the pass reads `N / N`.** Mark every remaining file, ending with the last one.
+   **Expected:** immediately before the pass ends (the last frame the diff is on screen), the banner
+   reads `N / N files reviewed  •  <scope>` and the bar is full.
+6. **The scope name in the banner matches the popup title's.** Compare the banner's `<scope>` segment
+   against **Show File List**'s title (section 4) at the same moment.
+   **Expected:** they read the same scope name — `Staged`, `Branch vs base` or `Commit range` — because
+   both read `QueueSnapshot.scope` off the same service.
+
+## 26. Focus mode — every visible tool window, not a fixed list
+
+`IdeLayoutController` (`src/main/kotlin/dev/tweety/reviewqueue/ui/IdeLayoutController.kt`) now hides
+**every tool window that is visible when a pass starts**, on any side of the IDE, whoever registered
+it — not a hard-coded list of ids. That is deliberately broader than "hide the Project window"
+(section 20.1's older behaviour): a fixed id list would silently miss the next plugin the user
+installs. `restore()` reopens exactly what `hideForReview()` recorded, so a window the user had
+already closed before the pass started must never come back.
+
+1. **Everything visible goes, including third-party.** Open the **Project** panel, the **Terminal**,
+   the **Git** tool window (or **Commit**, depending on your IDE's naming), and one third-party tool
+   window if you have one installed (a language plugin's panel, a database view, anything not shipped
+   by this plugin). Confirm all four are visible, then run **Start Review**.
+   **Expected:** all four disappear — not just the Project panel. If any third-party window survives,
+   that is the defect this section exists to catch; the whole point of reading `toolWindowIds` and
+   filtering on `isVisible` instead of naming ids is that nothing on this list should ever miss one.
+2. **Ending the pass restores exactly those four.** Click **End Review** (or let the pass complete).
+   **Expected:** all four windows you opened in step 1 reopen, in a state you'd recognize as "back to
+   how it was" — nothing extra appears.
+3. **A window already closed before the pass is not opened by ending it.** Close one of the four (say,
+   the Terminal) before starting a new pass. Leave the other three open. Start a pass, then end it.
+   **Expected:** the Terminal is **still closed** afterward. `hideForReview()`'s visibility filter is
+   the whole safety property here — only a window that was open when the pass started goes on the
+   hidden list, so `restore()` can never open one you had already closed. If the Terminal reappears,
+   the filter has regressed to "reopen a fixed list" and this is the item that catches it.
+4. **Repeat once with everything closed.** Close every tool window you can find, then start and end a
+   pass. **Expected:** nothing opens at the end — an empty "hidden" record restores to nothing, not to
+   some default layout.
+
+Sections 20.2, 20.3, 20.12 and 20.4's "no layout flash" check exercise the same controller from other
+angles (quitting mid-session, closing the review tab, closing the project, a mid-pass scope switch) —
+run those too if you have not already; this section is specifically about the *set* of windows hidden,
+not the timing of the hide/restore.
+
+## 27. Rename detection — one queue entry, keyed to the new path
+
+`GitReviewSource.resolveStaged` (`src/main/kotlin/dev/tweety/reviewqueue/git/GitReviewSource.kt`)
+switched the **Staged** scope from `git status --porcelain=v2` (no similarity pass) to
+`git diff --cached -M`, so a staged rename now resolves as one `'R'`-status change instead of a delete
+of the old path plus an add of the new one. **Commit Range** and **Branch vs Base** already had rename
+detection before this change — `GitChangeUtils.getDiff` and `getThreeDotDiffOrThrow` already ran with
+similarity detection — so this section is really only exercising something new in the **Staged**
+scope; the other two are here to confirm they still behave the same as before, not because anything in
+them changed.
+
+1. **Staged.** In a scratch repo, stage a plain rename: `git mv old.txt new.txt && git add -A`.
+   **Tools → Review Queue → Refresh**, then **Show File List**.
+   **Expected:** exactly **one** row, for `new.txt` — not a `old.txt` deletion row plus a `new.txt`
+   addition row. Start a pass, mark it reviewed, confirm the checkmark lands on `new.txt`.
+2. **Staged, with content changes alongside the rename.** `git mv` a file and also edit its content
+   before staging (`git mv a.txt b.txt && echo more >> b.txt && git add b.txt`).
+   **Expected:** still one row for `b.txt`, and its diff shows both the rename and the content change
+   in the same view — the same `'R'`-plus-`origPath` combination the code comment describes, where a
+   same-path edit and a genuine rename are handled by the identical code path.
+3. **Branch vs Base.** Commit a rename on a branch (`git mv old.txt new.txt && git commit -m rename`),
+   switch scope to **Branch vs Base…**, and confirm the queue still shows one row for the rename, keyed
+   to the new path — this scope should look unchanged from before this task.
+4. **Commit Range.** Point **Commit Range…** at the commit range spanning the same rename commit from
+   step 3, and confirm the same: one row, new path — again, this scope should look unchanged.
+5. **A rename always drops the reviewed mark, even with byte-identical content.** Mark a file
+   reviewed, then rename it (`git mv`, no content change) and re-stage. **Expected:** the row under the
+   new path is **unreviewed** — this is deterministic, not a possible outcome among several. Marks are
+   keyed by `ReviewKey.storageKey()` (`rootPath|relPath`, see `ReviewKey.kt`), and
+   `ReviewStateService.isReviewed` requires an exact match on that string
+   (`ReviewStateService.kt:44-45`); a rename changes `relPath`, so the new item's key can never equal
+   the old one's regardless of whether the bytes are identical. The old mark is simply orphaned in
+   storage (marks are never pruned — see the KDoc on `ReviewStateService`) and the new path's lookup
+   always misses. **If the mark appears to carry over, that is a regression — report it, do not record
+   it as an acceptable variant.**
+
+## 28. Right-click context menu on the review diff
+
+`ReviewDiffPopupGroup` (`src/main/kotlin/dev/tweety/reviewqueue/actions/diff/ReviewDiffPopupGroup.kt`)
+and `ReviewDiffExtension` (`src/main/kotlin/dev/tweety/reviewqueue/ui/ReviewDiffExtension.kt`) install
+a context menu on the review diff's editors: **Mark Reviewed** first, then the rest of the seven
+per-file actions, then a separator, then the five session controls, then a separator, then whatever the
+platform's own `Diff.EditorPopupMenu` contributes — with **Compare with Clipboard** filtered out.
+
+1. **Right-click inside the review diff, during a pass.** Start a review and right-click inside the
+   diff editor.
+   **Expected, in order top to bottom:**
+   - **Mark Reviewed** first.
+   - The rest of the per-file actions — **Toggle Reviewed**, **Show File List**, **Previous File**,
+     **Next File**, **Previous Change**, **Next Change** — seven per-file entries in total including
+     Mark Reviewed.
+   - A separator, then the five session controls — **Scope** (or however the platform renders it in a
+     popup), **Start Review**, **End Review**, **Refresh**, **Reset All**.
+   - A separator, then the platform's own diff menu.
+   **Expected also:** **Compare with Clipboard is absent**, and **Annotate with Git Blame is still
+   there** — it comes from `VcsActions.xml`, not from this plugin, and is exactly the kind of
+   platform-contributed entry a hand-written replacement list would have dropped by accident. Its
+   presence is what confirms the platform tail is read live rather than enumerated.
+2. **An unrelated diff during a pass gets the platform's untouched menu.** **This is the guard against
+   a global extension point misfiring, and it is the single most important check in this section** —
+   `DiffExtension.onViewerCreated` fires for *every* diff the IDE opens, not only this plugin's, so the
+   whole safety property is the `shouldDecorate` marker check. With a pass still running (do not end
+   it), open a diff the plugin did not open:
+   - From the **Git log** (VCS → Git → Show History, or right-click a file → Git → Show History, then
+     open a revision's diff), or
+   - **local history** (right-click a file → Local History → Show History), or
+   - **Compare Files** (select two files → right-click → Compare Files).
+   **Expected:** that diff's right-click menu is the **platform's stock menu, completely unchanged** —
+   Compare with Clipboard is **present**, and none of this plugin's per-file or session actions appear
+   anywhere on it. If any Review Queue action leaks into an unrelated diff's menu, the marker check in
+   `ReviewDiffExtension.shouldDecorate` has regressed to something broader than "did this plugin open
+   this specific chain."
+3. **A binary file gets no context menu at all — known and deliberate, please confirm it's
+   acceptable.** Stage a binary file change (a PNG works, as in section 13) as part of the scope, and
+   get onto it during a pass.
+   **Expected:** right-clicking inside the binary diff viewer shows **no Review Queue entries at all**
+   — not a partial menu, not a menu missing just the platform tail, nothing. This is **inherent, not a
+   bug to chase**: binary diff viewers (`TwosideBinaryDiffViewer` and friends) wrap a platform
+   `FileEditor` — an image viewer or `DumbFileEditor` — never an `EditorEx`, and
+   `installPopupHandler` has no `EditorEx` to attach a handler to without one. See the KDoc on
+   `ReviewDiffExtension.editorsOf` for the full disassembly-backed argument that no viewer-agnostic
+   alternative exists. **The diff toolbar's Mark Reviewed button still works on a binary file** — the
+   toolbar is built independently in `EditorTabDiffPresenter` and does not depend on there being a text
+   editor — so marking a binary file reviewed remains possible, just not from a right-click.
+   **Please explicitly confirm this is acceptable** as a permanent limitation (toolbar yes,
+   context-menu no, for binaries only) rather than something to fix later; record your answer in the
+   sign-off either way.
+
 ---
 
 ## Sign-off
@@ -671,7 +813,7 @@ the code — only from having done it in the IDE):
 - [ ] 1. Install
 - [ ] 2. Found a Gate B worktree
 - [ ] 3. Show File List lists the staged files, ordered by root then path
-- [ ] 4. Popup title reads `N / M reviewed  •  <scope>` and follows the scope (no automated coverage)
+- [ ] 4. Popup title reads `N / M files reviewed  •  <scope>` and follows the scope (no automated coverage)
 - [ ] 5. Superseded by section 20 — no separate sign-off needed
 - [ ] 6. Diff opens on pick outside a session (single reused tab)
 - [ ] 7. Marks survive IDE restart
@@ -688,8 +830,6 @@ the code — only from having done it in the IDE):
 - [ ] 14b. Submodule gitlink — does a row appear, and can it stay marked? (record the answer)
 - [ ] 15. Toggle Reviewed un-marks the file on screen without moving the diff
 - [ ] 16. `git` before/after diff is empty — no repository mutation
-- [ ] 17. Rename-as-delete+add — acceptable? (yes/no + comment)
-- [ ] 18. Cursor relocation — feels right? (yes/no + comment)
 - [ ] 19. idea.log read; no StackOverflowError / slow-EDT / ReadAction / reviewqueue diagnostics
       (state whether `ide.slow.operations.assertion` was enabled)
 - [ ] 20a. Start Review hides the Project tool window; End Review restores it (the calls themselves
@@ -772,3 +912,32 @@ the code — only from having done it in the IDE):
       reviewed" with its `Copy /myflow-do-done <name>` button — the suppression is not a mute
 - [ ] 24l. **No Review Queue tool window exists** — not on any stripe, not in View → Tool Windows, and
       the IDE logs no failure to restore one from older persisted state
+- [ ] 25a. Fresh scope banner reads `0 / N files reviewed  •  <scope>`, empty bar
+- [ ] 25b. Mark Reviewed advances the banner's count and bar
+- [ ] 25c. **Toggle Reviewed moves the count without the diff tab being replaced** — the subtle check
+      a render-once banner would fail
+- [ ] 25d. A background queue rebuild (re-staging another file mid-pass) also moves the banner
+- [ ] 25e. Completing the pass leaves the banner reading `N / N` on the last frame
+- [ ] 25f. The banner's scope name matches Show File List's popup-title scope name
+- [ ] 26a. Starting a pass hides **every** visible tool window, including a third-party one — not
+      only the Project panel
+- [ ] 26b. Ending the pass reopens exactly the windows that were visible when it started
+- [ ] 26c. **A window already closed before the pass is not reopened by ending it**
+- [ ] 26d. With everything closed beforehand, nothing opens at the end of a pass
+- [ ] 27a. Staged: a plain `git mv` produces one queue row keyed to the new path, not a delete+add pair
+- [ ] 27b. Staged: a rename with a simultaneous content edit still resolves to one row
+- [ ] 27c. Branch vs Base: a committed rename still resolves to one row keyed to the new path
+      (unchanged behaviour, confirmed not regressed)
+- [ ] 27d. Commit Range: same check as 27c (unchanged behaviour, confirmed not regressed)
+- [ ] 27e. Renaming a previously-reviewed file (even with unchanged content) and re-staging **always**
+      resets it to unreviewed — marks are keyed by path, a rename changes the path, so carry-over is
+      impossible by construction; the mark appearing to carry over is a defect, report it
+- [ ] 28a. Right-click in the review diff: Mark Reviewed first, all seven per-file actions, a
+      separator, all five session controls, a separator, the platform tail with Compare with Clipboard
+      **absent** and Annotate with Git Blame **present**
+- [ ] 28b. **An unrelated diff opened during a pass (Git log / local history / Compare Files) shows
+      the platform's stock menu, unmodified, with Compare with Clipboard still present** — the guard
+      against the global extension point misfiring
+- [ ] 28c. A binary file in a review pass shows **no** context menu at all, while the diff toolbar's
+      Mark Reviewed still works there — confirm this is an acceptable permanent limitation (yes/no +
+      comment)
