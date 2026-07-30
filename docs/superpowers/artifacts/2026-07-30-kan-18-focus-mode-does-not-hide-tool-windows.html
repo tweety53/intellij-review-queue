@@ -1,0 +1,693 @@
+<title>KAN-18 — Focus mode sweeps the wrong client session</title>
+
+<style>
+  :root {
+    --ink:      #171a20;
+    --ink-soft: #3d4450;
+    --slate:    #666f7e;
+    --hair:     #d6dae1;
+    --paper:    #f1f3f6;
+    --raise:    #ffffff;
+    --signal:   #9c5312;
+    --signal-bg:#f6ead9;
+    --verify:   #2a6558;
+    --verify-bg:#e2eeea;
+    --code-bg:  #e9ecf1;
+
+    --f-display: "JetBrains Mono", ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
+    --f-body: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --f-mono: var(--f-display);
+
+    --step--1: clamp(0.78rem, 0.76rem + 0.1vw, 0.83rem);
+    --step-0:  clamp(1rem, 0.97rem + 0.15vw, 1.06rem);
+    --step-1:  clamp(1.2rem, 1.13rem + 0.34vw, 1.4rem);
+    --step-2:  clamp(1.5rem, 1.36rem + 0.68vw, 1.95rem);
+    --step-3:  clamp(1.95rem, 1.68rem + 1.34vw, 2.8rem);
+
+    --measure: 68ch;
+    --pad: clamp(1.25rem, 4vw, 3rem);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --ink:      #e6e9ef;
+      --ink-soft: #b3bac6;
+      --slate:    #8b95a5;
+      --hair:     #2a3040;
+      --paper:    #0f1219;
+      --raise:    #161b25;
+      --signal:   #e2934a;
+      --signal-bg:#2c2118;
+      --verify:   #62b3a1;
+      --verify-bg:#152520;
+      --code-bg:  #1a202b;
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --ink:      #e6e9ef;
+    --ink-soft: #b3bac6;
+    --slate:    #8b95a5;
+    --hair:     #2a3040;
+    --paper:    #0f1219;
+    --raise:    #161b25;
+    --signal:   #e2934a;
+    --signal-bg:#2c2118;
+    --verify:   #62b3a1;
+    --verify-bg:#152520;
+    --code-bg:  #1a202b;
+  }
+
+  :root[data-theme="light"] {
+    --ink:      #171a20;
+    --ink-soft: #3d4450;
+    --slate:    #666f7e;
+    --hair:     #d6dae1;
+    --paper:    #f1f3f6;
+    --raise:    #ffffff;
+    --signal:   #9c5312;
+    --signal-bg:#f6ead9;
+    --verify:   #2a6558;
+    --verify-bg:#e2eeea;
+    --code-bg:  #e9ecf1;
+  }
+
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--f-body);
+    font-size: var(--step-0);
+    line-height: 1.62;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap {
+    max-width: 78ch;
+    margin-inline: auto;
+    padding: clamp(2rem, 6vw, 4.5rem) var(--pad) 6rem;
+    display: flex;
+    flex-direction: column;
+    gap: clamp(2.5rem, 5vw, 3.75rem);
+  }
+
+  p, li { max-width: var(--measure); }
+
+  /* ---------- masthead ---------- */
+
+  .mast { display: flex; flex-direction: column; gap: 1.1rem; }
+
+  .tag {
+    font-family: var(--f-display);
+    font-size: var(--step--1);
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--slate);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 1.1rem;
+    align-items: baseline;
+  }
+
+  .tag a { color: var(--signal); text-decoration: none; border-bottom: 1px solid currentColor; }
+  .tag a:hover, .tag a:focus-visible { color: var(--ink); }
+
+  h1 {
+    font-family: var(--f-display);
+    font-size: var(--step-3);
+    font-weight: 700;
+    line-height: 1.12;
+    letter-spacing: -0.02em;
+    text-wrap: balance;
+    margin: 0;
+  }
+
+  .standfirst {
+    font-size: var(--step-1);
+    line-height: 1.5;
+    color: var(--ink-soft);
+    max-width: 58ch;
+  }
+
+  /* ---------- sections ---------- */
+
+  section { display: flex; flex-direction: column; gap: 1.15rem; }
+
+  .eyebrow {
+    font-family: var(--f-display);
+    font-size: var(--step--1);
+    font-weight: 700;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--slate);
+    padding-bottom: 0.55rem;
+    border-bottom: 1px solid var(--hair);
+    margin: 0;
+  }
+
+  h2 {
+    font-family: var(--f-display);
+    font-size: var(--step-2);
+    font-weight: 700;
+    line-height: 1.2;
+    letter-spacing: -0.015em;
+    text-wrap: balance;
+    margin: 0;
+  }
+
+  h3 {
+    font-family: var(--f-display);
+    font-size: var(--step-1);
+    font-weight: 700;
+    line-height: 1.3;
+    letter-spacing: -0.01em;
+    margin: 0.6rem 0 0;
+  }
+
+  p { margin: 0; }
+
+  ul, ol { margin: 0; padding-left: 1.35rem; display: flex; flex-direction: column; gap: 0.55rem; }
+
+  strong { font-weight: 650; }
+
+  code {
+    font-family: var(--f-mono);
+    font-size: 0.88em;
+    background: var(--code-bg);
+    padding: 0.12em 0.35em;
+    border-radius: 2px;
+  }
+
+  /* ---------- evidence strip ---------- */
+
+  .evidence {
+    background: var(--raise);
+    border: 1px solid var(--hair);
+    border-left: 3px solid var(--signal);
+    padding: 1.15rem 1.3rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .evidence .src {
+    font-family: var(--f-display);
+    font-size: var(--step--1);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--signal);
+    font-weight: 700;
+  }
+
+  .evidence pre { margin: 0; }
+
+  pre {
+    background: var(--code-bg);
+    border: 1px solid var(--hair);
+    padding: 0.95rem 1.1rem;
+    overflow-x: auto;
+    font-family: var(--f-mono);
+    font-size: var(--step--1);
+    line-height: 1.6;
+    color: var(--ink);
+    max-width: 100%;
+  }
+
+  pre code { background: none; padding: 0; font-size: inherit; }
+
+  .cmt { color: var(--slate); }
+  .hot { color: var(--signal); font-weight: 700; }
+
+  /* ---------- decisions ---------- */
+
+  .decisions { display: flex; flex-direction: column; gap: 1.6rem; }
+
+  .decision { display: flex; flex-direction: column; gap: 0.5rem; }
+
+  .decision-id {
+    font-family: var(--f-display);
+    font-size: var(--step--1);
+    color: var(--verify);
+    background: var(--verify-bg);
+    padding: 0.12em 0.45em;
+    align-self: flex-start;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+  }
+
+  .decision dl { margin: 0; display: grid; grid-template-columns: max-content 1fr; gap: 0.4rem 1rem; }
+  .decision dt {
+    font-family: var(--f-display);
+    font-size: var(--step--1);
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--slate);
+    padding-top: 0.28em;
+  }
+  .decision dd { margin: 0; max-width: var(--measure); }
+
+  @media (max-width: 34rem) {
+    .decision dl { grid-template-columns: 1fr; gap: 0.15rem; }
+    .decision dt { padding-top: 0.6rem; }
+  }
+
+  /* ---------- spec deltas ---------- */
+
+  .req {
+    border-top: 1px solid var(--hair);
+    padding-top: 1.1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .req-name { font-family: var(--f-display); font-weight: 700; font-size: var(--step-1); line-height: 1.3; margin: 0; }
+
+  .scenarios { list-style: none; padding: 0; gap: 0.35rem; }
+  .scenarios li {
+    font-family: var(--f-mono);
+    font-size: var(--step--1);
+    color: var(--ink-soft);
+    padding-left: 1.4rem;
+    position: relative;
+  }
+  .scenarios li::before {
+    content: "→";
+    position: absolute;
+    left: 0;
+    color: var(--verify);
+  }
+
+  /* ---------- task table ---------- */
+
+  .scroller { overflow-x: auto; border: 1px solid var(--hair); background: var(--raise); }
+
+  table { border-collapse: collapse; width: 100%; min-width: 40rem; font-size: var(--step--1); }
+
+  th, td { text-align: left; padding: 0.7rem 0.95rem; border-bottom: 1px solid var(--hair); vertical-align: top; }
+
+  thead th {
+    font-family: var(--f-display);
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--slate);
+    white-space: nowrap;
+  }
+
+  tbody tr:last-child td { border-bottom: none; }
+
+  td.n { font-family: var(--f-mono); font-variant-numeric: tabular-nums; color: var(--signal); font-weight: 700; white-space: nowrap; }
+  td.f { font-family: var(--f-mono); color: var(--ink-soft); }
+
+  /* ---------- notes ---------- */
+
+  .note {
+    background: var(--signal-bg);
+    border: 1px solid var(--hair);
+    padding: 1rem 1.2rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+  }
+  .note p { max-width: none; }
+
+  .note-label {
+    font-family: var(--f-display);
+    font-size: var(--step--1);
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--signal);
+  }
+
+  footer {
+    border-top: 1px solid var(--hair);
+    padding-top: 1.2rem;
+    font-family: var(--f-mono);
+    font-size: var(--step--1);
+    color: var(--slate);
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+  }
+
+  a { color: var(--signal); }
+  a:focus-visible, .tag a:focus-visible { outline: 2px solid var(--verify); outline-offset: 3px; }
+</style>
+
+<div class="wrap">
+
+  <header class="mast">
+    <p class="tag">
+      <span>Proposal · STARTED</span>
+      <span><a href="https://tweety53.atlassian.net/browse/KAN-18">KAN-18</a></span>
+      <span>2026-07-30</span>
+      <span>Review Queue · IU-2026.2</span>
+    </p>
+    <h1>Focus mode hid a layout<br>nobody was looking at.</h1>
+    <p class="standfirst">
+      The sweep was right. The manager was right. <code>hide()</code> worked. It was all
+      addressed to the wrong client session — and under a split IDE, that session has no screen.
+    </p>
+  </header>
+
+  <section>
+    <p class="eyebrow">Why</p>
+    <h2>The pass starts, the diff opens, and Project and Terminal stay put</h2>
+    <p>
+      KAN-6 shipped the diagnostic that made this observable and deliberately did not fix it. Three
+      sandbox runs produced the same result each time: the sweep enumerated 22 tool window ids,
+      judged <code>Terminal</code>, <code>Project</code> and <code>Database</code> visible, and the
+      post-hide re-check confirmed all three invisible the instant <code>hide()</code> returned.
+    </p>
+    <p>The screen disagreed. Nothing in the plugin could say why.</p>
+  </section>
+
+  <section>
+    <p class="eyebrow">Root cause · established from bytecode, not inferred</p>
+    <h2>Two platform overrides read the current <code>ClientId</code></h2>
+    <p>
+      Under a split or remote-dev IDE, the <code>intellij.platform.backend.split</code> module —
+      shipped inside <code>cwm-plugin</code> — overrides the project-level
+      <code>ToolWindowManager</code>. Two of its methods resolve the session from the ambient
+      <code>ClientId</code> before doing anything:
+    </p>
+
+    <div class="evidence">
+      <p class="src">javap -c BackendServerToolWindowManager · IU-2026.2 build 262.8665.258</p>
+      <pre><code><span class="cmt">// getToolWindow(id)</span>
+val session = ClientSessionsManager.getProjectSession(project, <span class="hot">ClientId.getCurrent()</span>) ?: return null
+if (session.isLocal()) return super.getToolWindow(id)
+<span class="cmt">// …otherwise the per-client window, by extractor mode</span>
+
+<span class="cmt">// hideToolWindow(id, …)</span>
+val session = ClientSessionsUtil.getCurrentSession(project)
+if (session.isLocal()) super.hideToolWindow(id, hideSide, moveFocus, removeFromStripe, source)
+updateBackendToolwindowState(id, <span class="hot">session</span>, { Hidden })   <span class="cmt">// ← the push that reaches a frontend</span></code></pre>
+    </div>
+
+    <p>
+      <code>IdeLayoutController</code> ran with no client id in scope. So it fetched the
+      <em>host</em> tool windows, hid them — which flips the host <code>WindowInfo</code>, and is
+      exactly why the post-hide check reported “confirmed no longer visible” — and pushed
+      <code>Hidden</code> to the <strong>local</strong> session. The frontend session the reviewer
+      is looking at was never told.
+    </p>
+    <p>
+      Every logged fact is consistent with this and with nothing else. This also settles the
+      ticket’s second open question: in a plain monolith the only session is <code>LOCAL</code>, and
+      the code already ran under it. The defect is specific to a split IDE.
+    </p>
+  </section>
+
+  <section>
+    <p class="eyebrow">What changes</p>
+    <h2>A scoping fix, not a manager lookup</h2>
+    <ul>
+      <li>
+        <strong>The sweep runs inside one session’s <code>ClientId</code></strong> — chosen
+        <code>FRONTEND</code> → <code>CONTROLLER</code> → <code>LOCAL</code>. Enumeration,
+        visibility filtering, recording and hiding all happen there, so the record describes the
+        same layout it mutates.
+      </li>
+      <li>
+        <strong>Restoring runs in every non-guest session in turn.</strong> An id is forgotten once
+        it resolved in at least one, and kept otherwise.
+      </li>
+      <li>
+        <strong>Code With Me guests are never touched</strong>, on the way in or the way out. No
+        built-in <code>ClientKind</code> expresses “non-guest”: <code>OWNER</code> is
+        <code>LOCAL ∪ CONTROLLER</code> and excludes <code>FRONTEND</code>. The filter is written by
+        hand over <code>ClientType</code>.
+      </li>
+      <li>
+        <strong>A re-show watch</strong> subscribes to <code>ToolWindowManagerListener</code> on the
+        swept session’s own message bus and warns the first time a hidden window is shown again
+        mid-pass.
+      </li>
+      <li>
+        <strong>Every KAN-6 log line is kept</strong> and extended to name the chosen session’s
+        <code>ClientId</code> and <code>ClientType</code>.
+      </li>
+    </ul>
+
+    <div class="note">
+      <p class="note-label">No dependency change</p>
+      <p>
+        <code>ClientId</code>, <code>ClientKind</code>, <code>ClientType</code>,
+        <code>ClientSessionsManager</code> and <code>ClientProjectSession</code> are core platform
+        (<code>intellij.platform.core.jar</code>, <code>util.jar</code>). No <code>rdserver</code> or
+        <code>cwm-plugin</code> symbol is referenced and <code>build.gradle.kts</code> is untouched.
+      </p>
+    </div>
+  </section>
+
+  <section>
+    <p class="eyebrow">The asymmetry</p>
+    <h2>Hide narrowly. Restore broadly.</h2>
+    <p>
+      This is deliberate, and it is safe in one direction only. Hiding must never touch a layout
+      whose visibility it did not measure — that is how a union across sessions would end up hiding
+      a window the user had closed elsewhere, then reopening it there later.
+    </p>
+    <p>
+      Restoring is bounded by the record: it only ever shows ids a pass already hid, so it cannot
+      open anything the sweep did not close. That breadth is what keeps the quit-mid-pass path
+      working when <code>ReviewLayoutRestorer</code> runs at post-startup, before a frontend session
+      has attached.
+    </p>
+  </section>
+
+  <section>
+    <p class="eyebrow">Decisions</p>
+    <h2>Four choices, and what ruled out the alternatives</h2>
+
+    <div class="decisions">
+
+      <article class="decision">
+        <span class="decision-id">hide-single-target-session</span>
+        <h3>Which session the hide sweep acts on</h3>
+        <dl>
+          <dt>Chosen</dt>
+          <dd>One target session, <code>FRONTEND</code> → <code>CONTROLLER</code> → <code>LOCAL</code>
+            — visibility is measured in exactly the layout that is mutated, so the flat record and
+            every existing spec scenario stay correct.</dd>
+          <dt>Considered</dt>
+          <dd><em>Hide in every non-guest session and record the union</em> — a window visible in one
+            session and closed in another gets hidden, then reopened where the user had closed it.
+            <em>A per-session record keyed by client id</em> — client ids are not stable across an
+            IDE restart, so the persisted record could not be replayed by
+            <code>ReviewLayoutRestorer</code>, the one case the persistence exists for.</dd>
+        </dl>
+      </article>
+
+      <article class="decision">
+        <span class="decision-id">restore-every-non-guest-session</span>
+        <h3>How restore reaches the right layout</h3>
+        <dl>
+          <dt>Chosen</dt>
+          <dd>Restore into every non-guest session — restoring is bounded by the record, so breadth
+            costs nothing, and it survives the frontend session not having attached yet.</dd>
+          <dt>Considered</dt>
+          <dd><em>Restore into the same single target session</em> — symmetric, but at post-startup
+            it can fall back to <code>LOCAL</code>, silently drop the ids from the record and leave
+            the frontend windows hidden with nothing left to reopen them. <em>Same target plus a
+            retry when a session appears</em> — most precise, but adds a listener and a retry path to
+            a class whose safety argument rests on being simple.</dd>
+        </dl>
+      </article>
+
+      <article class="decision">
+        <span class="decision-id">clientid-recording-fixture</span>
+        <h3>How the fix is covered, given the stub cannot reproduce the defect</h3>
+        <dl>
+          <dt>Chosen</dt>
+          <dd>An injectable session-picker seam plus <code>ClientId</code> recording in the fixture —
+            the exact regression becomes an assertion, in the fixture that until now could not
+            express it.</dd>
+          <dt>Considered</dt>
+          <dd><em>A pure selection unit test only</em> — leaves the wiring to the manual test guide,
+            which would be the third bug shipped behind this gap. <em>A fake
+            <code>ClientProjectSession</code> registered with the platform</em> — closest to
+            production, but it extends <code>ComponentManager</code>, so a faithful fake is large and
+            brittle.</dd>
+        </dl>
+      </article>
+
+      <article class="decision">
+        <span class="decision-id">reshow-watch-listener</span>
+        <h3>Whether to close the known limitation in the post-hide diagnostic</h3>
+        <dl>
+          <dt>Chosen</dt>
+          <dd>Add the deferred check as a <code>ToolWindowManagerListener</code> subscription on the
+            target session, always on. Event-driven means no interval to justify and a re-show is
+            caught whenever it happens.</dd>
+          <dt>Considered</dt>
+          <dd><em>One delayed re-query after a fixed interval</em> — the interval is an unsourced
+            guess and it observes a single instant. <em>Both a listener and a delayed sweep</em> —
+            two log sources that can disagree. <em>Gating it behind a Registry key</em> — the next
+            report would arrive without the evidence, the exact cycle KAN-6 shipped logging to end.</dd>
+        </dl>
+      </article>
+
+    </div>
+
+    <div class="note">
+      <p class="note-label">Scope beyond the ticket</p>
+      <p>
+        The re-show watch is more than KAN-18 asks for. It was flagged as widening the change and
+        taken deliberately; a dated line is appended to the issue under
+        <em>Added during implementation</em>.
+      </p>
+    </div>
+  </section>
+
+  <section>
+    <p class="eyebrow">Delta specs · review-layout-management</p>
+    <h2>Three added requirements</h2>
+    <p>
+      Nothing is modified or removed. <em>A pass hides every visible tool window</em> and
+      <em>Persisted state naming an unmanaged window is pruned on load</em> both stand unchanged —
+      they were never wrong.
+    </p>
+
+    <div class="req">
+      <p class="req-name">A pass hides in the client session the reviewer is looking at</p>
+      <p>
+        Exactly one session is chosen — frontend, then controlling remote client, then local — and
+        visibility, recording and hiding all happen within it. A guest session is never chosen. An
+        installation with only a local session behaves exactly as it did before.
+      </p>
+      <ul class="scenarios">
+        <li>The sweep runs in the frontend session</li>
+        <li>A controlling remote client is chosen when there is no frontend</li>
+        <li>A plain local installation is unaffected</li>
+        <li>A guest’s layout is never touched</li>
+      </ul>
+    </div>
+
+    <div class="req">
+      <p class="req-name">Ending a pass restores into every session the reviewer could be looking at</p>
+      <p>
+        Each recorded window is shown in every non-guest session in turn. This does not widen what is
+        reopened. An id is forgotten once it resolved anywhere, and kept when it resolved nowhere.
+      </p>
+      <ul class="scenarios">
+        <li>A window hidden in one session is reopened in the session now present</li>
+        <li>An id that resolves nowhere stays on the record</li>
+        <li>A guest session is not restored into</li>
+      </ul>
+    </div>
+
+    <div class="req">
+      <p class="req-name">A window re-shown during a pass is reported</p>
+      <p>
+        Driven by the window actually being shown, not by re-checking at a chosen moment. The
+        plugin’s own restoring is not reported — reopening the recorded windows is what ending a pass
+        means.
+      </p>
+      <ul class="scenarios">
+        <li>Something reopens a hidden window mid-pass</li>
+        <li>Ending the pass is not reported as a re-show</li>
+        <li>A second pass reports independently</li>
+      </ul>
+    </div>
+  </section>
+
+  <section>
+    <p class="eyebrow">Plan · eight tasks, TDD throughout</p>
+    <h2>What gets built, in order</h2>
+    <p>
+      Full plan with every test body, run command and expected output at
+      <code>openspec/changes/kan-18-focus-mode-does-not-hide-tool-windows/tasks.md</code>.
+    </p>
+
+    <div class="scroller">
+      <table>
+        <thead>
+          <tr><th>#</th><th>Task</th><th>Files</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="n">1</td>
+            <td>The session rule as a pure function — <code>hideTarget</code> and
+              <code>restoreTargets</code> over <code>SessionRef</code>, tested across every
+              <code>ClientType</code> combination</td>
+            <td class="f">+ ReviewSessionTargeting.kt<br>+ ReviewSessionTargetingTest.kt</td>
+          </tr>
+          <tr>
+            <td class="n">2</td>
+            <td>The seam — a project service enumerating real sessions and their message buses</td>
+            <td class="f">+ ReviewClientSessions.kt</td>
+          </tr>
+          <tr>
+            <td class="n">3</td>
+            <td>The fixture learns to see <code>ClientId</code> — record it at every
+              <code>getToolWindow</code>, <code>hide</code> and <code>show</code>; add fabricated
+              sessions</td>
+            <td class="f">~ RecordingToolWindows.kt</td>
+          </tr>
+          <tr>
+            <td class="n">4</td>
+            <td>Scope the sweep — <code>hideForReview()</code> resolves a target and runs the
+              existing body inside its <code>ClientId</code></td>
+            <td class="f">~ IdeLayoutController.kt<br>~ IdeLayoutControllerTest.kt</td>
+          </tr>
+          <tr>
+            <td class="n">5</td>
+            <td>Scope the restore — every non-guest session, forget an id once it resolved
+              anywhere</td>
+            <td class="f">~ IdeLayoutController.kt<br>~ IdeLayoutControllerTest.kt</td>
+          </tr>
+          <tr>
+            <td class="n">6</td>
+            <td>The re-show watch — arm at end of sweep, disarm before restore shows anything</td>
+            <td class="f">~ IdeLayoutController.kt<br>~ IdeLayoutControllerTest.kt</td>
+          </tr>
+          <tr>
+            <td class="n">7</td>
+            <td>The diagnostic names the session — every KAN-6 line, plus a superseded KDoc claim
+              corrected</td>
+            <td class="f">~ IdeLayoutController.kt</td>
+          </tr>
+          <tr>
+            <td class="n">8</td>
+            <td>Whole-change verification — full build, forbidden-symbol grep, README check, and a
+              sandbox run reading the log for the session suffix</td>
+            <td class="f">~ README.md (if it contradicts)</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="note">
+      <p class="note-label">The only check that can see the real defect</p>
+      <p>
+        Task 8 ends in the sandbox, because no unit test can. The handoff records which
+        <code>ClientType</code> the log named — the one fact this whole change turns on.
+      </p>
+    </div>
+  </section>
+
+  <section>
+    <p class="eyebrow">Must not regress</p>
+    <h2>Six load-bearing behaviours</h2>
+    <ul>
+      <li>The record is written <strong>before</strong> anything is hidden, so a part-way failure still leaves a restorable record.</li>
+      <li>The sweep enumerates every visible window rather than consulting a fixed id list.</li>
+      <li>The hide loop names the id <code>hide()</code> threw on and rethrows — fail-fast is unchanged.</li>
+      <li>The post-hide re-query still swallows its own throwable and never breaks a successful hide.</li>
+      <li><code>LEGACY_IDS</code> pruning on <code>loadState</code> stays.</li>
+      <li>Every KAN-6 diagnostic line stays, with the pre-hide line still emitted before the mutation.</li>
+    </ul>
+  </section>
+
+  <footer>
+    <span>Baseline: 215 tests, 0 failures — ./gradlew test @ b06a364</span>
+    <span>Design: docs/superpowers/specs/2026-07-30-kan-18-focus-mode-does-not-hide-tool-windows-design.md</span>
+    <span>Next: /myflow-do kan-18-focus-mode-does-not-hide-tool-windows</span>
+  </footer>
+
+</div>

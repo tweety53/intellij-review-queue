@@ -47,7 +47,8 @@ it and re-reads it in the background; the next Start Review or Show File List re
 which is the point at which you see a progress dialog.
 
 **Start Review** begins a guided pass over everything still unreviewed in the current scope. It hides
-the Project tool window and opens the first file as a diff.
+every tool window that is currently open — not just Project — and opens the first file as a diff. A
+window you had already closed is left closed, and is not reopened when the pass ends.
 
 On **macOS** it is <kbd>⌘</kbd><kbd>⌥</kbd><kbd>⇧</kbd><kbd>R</kbd>, joining the plugin's
 <kbd>⌘</kbd><kbd>⌥</kbd><kbd>⇧</kbd> cluster. **On Windows and Linux it ships with no shortcut at
@@ -137,12 +138,12 @@ the pass. Start Review appears here too, for uniformity, but shows up greyed out
 because a pass is already running. Each one **asks before acting**: they sit directly above the code
 you are reading, where an accidental press is expensive. In the Tools menu only Reset All confirms.
 
-**End Review** leaves the guided pass early. Every mark made so far is kept and the Project tool
-window is restored. Closing the review diff tab by hand does the same thing. End Review is not in the
+**End Review** leaves the guided pass early. Every mark made so far is kept and the tool windows the
+pass hid are reopened. Closing the review diff tab by hand does the same thing. End Review is not in the
 Tools menu — it belongs to a running pass, so it lives on the diff toolbar and in Find Action.
 
-The diff tab's title tracks progress as `Review N/M - filename`. Marking the last file restores the
-Project tool window automatically and fires the completion balloon.
+The diff tab's title tracks progress as `Review N/M - filename`. Marking the last file reopens the
+hidden tool windows automatically and fires the completion balloon.
 
 Files are ordered by git root (repository), then by path within each root, so a queue spanning
 submodules stays grouped by the repository each file belongs to.
